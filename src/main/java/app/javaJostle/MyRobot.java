@@ -22,7 +22,7 @@ public class MyRobot extends Robot{
     private int stuckCounter = 0;
 
     public MyRobot(int x, int y){
-        super(x, y, 2, 3, 2, 3,"bob", "myRobotImage.png", "defaultProjectileImage.png");
+        super(x, y, 2, 3, 2, 3,"bob", ".png", "defaultProjectileImage.png");
         // Health: 3, Speed: 3, Attack Speed: 2, Projectile Strength: 2
         // Total = 10
         // Image name is "myRobotImage.png"

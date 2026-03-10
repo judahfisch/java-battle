@@ -56,7 +56,7 @@ public abstract class Robot {
         } else if (projectileStrengthPoints < 1) {
             throw new IllegalArgumentException("Projectile strength points must be at least 1");
         } else if (sum != 10) {
-            throw new IllegalArgumentException("The sum of all points must equal 11");
+            throw new IllegalArgumentException("The sum of all points must equal 10");
         } else if (healthPoints > 5) {
             throw new IllegalArgumentException("Health points must not exceed 5");
         } else if (speedPoints > 5) {
@@ -66,22 +66,12 @@ public abstract class Robot {
         } else if (projectileStrengthPoints > 5) {
             throw new IllegalArgumentException("Projectile strength points must not exceed 5");
         }
-        try {
-            this.image = Utilities.loadImage(imageName);
-            if (this.image == null)
-                this.image = Utilities.ROBOT_ERROR;
-        } catch (Exception e) {
-            System.err.println("Failed to load image: " + imageName + " - " + e.getMessage());
-            e.printStackTrace();
+        this.image = Utilities.loadImage(imageName);
+        if (this.image == null) {
             this.image = Utilities.ROBOT_ERROR;
         }
-        try {
-            this.projectileImage = Utilities.loadImage(projectileImageName);
-            if (this.projectileImage == null)
-                this.projectileImage = Utilities.DEFAULT_PROJECTILE_IMAGE;
-        } catch (Exception e) {
-            System.err.println("Failed to load image: " + projectileImageName + " - " + e.getMessage());
-            e.printStackTrace();
+        this.projectileImage = Utilities.loadImage(projectileImageName);
+        if (this.projectileImage == null) {
             this.projectileImage = Utilities.DEFAULT_PROJECTILE_IMAGE;
         }
 

@@ -40,7 +40,7 @@ public class Utilities {
     public static BufferedImage loadImage(String imgName) {
         try {
             // Ensure the full path is constructed correctly
-            BufferedImage img = ImageIO.read(new File("app/resources/images/" + imgName));
+            BufferedImage img = ImageIO.read(new File("src/main/resources/images/" + imgName));
             return cropToContent(img);
         } catch (IOException e) {
             System.err.println("Failed to load image: " + imgName + " - " + e.getMessage());
@@ -158,7 +158,7 @@ public class Utilities {
         // This will be used if className is not "MyRobot".
        
         // Attempt to define robotsResourceRootUrl from a specific source directory
-        File specificSrcRobotsDir = new File("app/resources/robots"); // Path relative to project root
+        File specificSrcRobotsDir = new File("src/main/resources/robots"); // Path relative to project root
         URL robotsResourceRootUrl = null;
 
 
@@ -209,7 +209,7 @@ public class Utilities {
                
                 System.out.println("Attempting to load robot class via URLClassLoader: bcc.javaJostle." + className + " from " + robotsResourceRootUrl);
                 // Assumes robot classes are in the 'bcc.javaJostle' package within the /robots directory
-                Class<?> loadedClass = classLoader.loadClass("bcc.javaJostle." + className);
+                Class<?> loadedClass = classLoader.loadClass("app.javaJostle." + className);
 
 
                 if (Robot.class.isAssignableFrom(loadedClass)) {

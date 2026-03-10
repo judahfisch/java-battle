@@ -67,7 +67,7 @@ public class GameManager {
         robotOptions.add("MyRobot"); // Prioritize "MyRobot"
         foundRobotNames.add("MyRobot");
 
-        File robotsDir = new File("app/resources/robots");
+        File robotsDir = new File("src/main/resources/robots");
         if (robotsDir.exists() && robotsDir.isDirectory()) {
             File[] files = robotsDir.listFiles();
             if (files != null) {
@@ -101,7 +101,7 @@ public class GameManager {
 
     private void loadMapOptions() { // Renamed from loadMapNames
         mapOptions.clear();
-        File mapsDir = new File("app/resources/maps");
+        File mapsDir = new File("src/main/resources/maps");
         if (mapsDir.exists() && mapsDir.isDirectory()) {
             File[] files = mapsDir.listFiles();
             if (files != null) {

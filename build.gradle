@@ -25,8 +25,8 @@ task compileRobots {
     
     doLast {
         // Get source directory
-        File sourceDir = file('app/javaJostle')
-        File outputDir = file('app/resources/robots')
+        File sourceDir = file('src/main/java/app/javaJostle')
+        File outputDir = file('src/main/resources/robots')
         File stagingDir = file("${buildDir}/robot-classes")
         
         // Create output directory if it doesn't exist
@@ -54,10 +54,10 @@ task compileRobots {
         // Compile robot sources with the JDK compiler so this works across Gradle versions.
         def compiler = javax.tools.ToolProvider.getSystemJavaCompiler()
         if (compiler == null) {
-            throw new org.gradle.api.GradleException('No system Java compiler found. Make sure Gradle runs with a JDK, not a JRE.')
+            throw new RuntimeException('No system Java compiler found. Make sure Gradle runs with a JDK, not a JRE.')
         }
 
-        File sourceRoot = projectDir
+        File sourceRoot = file('src/main/java')
 
         List<String> compileArgs = [
             '-d', stagingDir.absolutePath,
@@ -68,10 +68,10 @@ task compileRobots {
 
         int result = compiler.run(null, null, null, *compileArgs)
         if (result != 0) {
-            throw new org.gradle.api.GradleException("Robot compilation failed with exit code ${result}")
+            throw new RuntimeException("Robot compilation failed with exit code ${result}")
         }
 
-        // Flatten robot classes into app/resources/robots (no nested package folders).
+        // Flatten robot classes into src/main/resources/robots (no nested package folders).
         // Copy top-level and inner classes for each robot type only.
         List<File> allCompiled = fileTree(stagingDir).matching { include '**/*.class' }.files.toList()
         robotClassNames.each { className ->
@@ -89,10 +89,4 @@ task compileRobots {
         
         println "Robot compilation complete. Output directory: ${outputDir.absolutePath}"
     }
-}
-
-compileJava.dependsOn compileRobots
-
-tasks.named('run') {
-    dependsOn compileRobots
 }

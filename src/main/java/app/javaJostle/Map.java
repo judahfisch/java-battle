@@ -12,7 +12,7 @@ public class Map {
     public Map(String name) {
         // load the map from a file or resource
         ArrayList<int[]> rows = new ArrayList<>();
-        String path = "app/resources/maps/" + name + ".txt"; // Ensure this path is correct
+        String path = "src/main/resources/maps/" + name + ".txt"; // Ensure this path is correct
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {
             String line;
             while ((line = br.readLine()) != null) {

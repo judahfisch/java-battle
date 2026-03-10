@@ -1,12 +1,13 @@
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "type": "java",
-      "name": "Run App",
-      "request": "launch",
-      "mainClass": "app.javaJostle.App",
-      "preLaunchTask": "gradle compileRobots"
-    }
-  ]
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Launch App",
+            "request": "launch",
+            "mainClass": "app.javaJostle.App",
+            "projectName": "java-battle",
+            "preLaunchTask": "gradle compileRobots"
+        }
+    ]
 }
