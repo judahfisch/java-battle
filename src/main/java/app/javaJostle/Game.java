@@ -2,108 +2,122 @@ package app.javaJostle;
 
 import javax.swing.JPanel;
 import java.awt.Graphics;
-import java.awt.Dimension; // For setPreferredSize
+import java.awt.Dimension;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
-import java.awt.Point; // For Point class
+import java.awt.Point;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 class Game extends JPanel {
+    private final AtomicInteger thinkThreadCounter = new AtomicInteger(1);
+    private final ExecutorService thinkExecutor = Executors.newFixedThreadPool(
+        Math.max(2, Runtime.getRuntime().availableProcessors()),
+        new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable runnable) {
+                Thread thread = new Thread(runnable);
+                thread.setName("RobotThinkThread-" + thinkThreadCounter.getAndIncrement());
+                thread.setDaemon(true);
+                return thread;
+            }
+        }
+    );
+
     private ArrayList<Robot> robots;
-    private ArrayList<Projectile> projectiles = new ArrayList<>(); // Placeholder
-    private ArrayList<PowerUp> powerUps; // Assuming PowerUp is the class for individual power-ups
+    private ArrayList<Projectile> projectiles = new ArrayList<>();
+    private ArrayList<PowerUp> powerUps;
     private Map map;
     private int duration = 0;
-    private Random randomGenerator; // Added for smartSpawn
-    // Fields to store current display parameters
+    private Random randomGenerator;
     private int currentWidth, currentHeight, currentCameraX, currentCameraY;
     private double currentZoomFactor;
     private int maxDuration;
+    private final HashMap<Integer, ArrayList<Robot>> robotGrid = new HashMap<>();
 
     public Game(ArrayList<String> robotFileNames, String mapName, int maxDuration) {
-        this.robots = new ArrayList<>();
-        this.powerUps = new ArrayList<>();
+        robots = new ArrayList<>();
+        powerUps = new ArrayList<>();
         this.maxDuration = maxDuration;
-        randomGenerator = new Random(); // Initialize random generator for smartSpawn
+        randomGenerator = new Random();
 
         map = new Map(mapName);
-        // use robotFileNames to create robots
-       
-            try {
-               
 
-                // Use the passed robotFileNames
-                for (String className : robotFileNames) {
-                    int encodedSpawnLocation = smartSpawn();
-                    if (encodedSpawnLocation == -1) {
-                        System.err.println(
-                                "Could not find a valid spawn location for " + className + ". Skipping robot.");
-                        continue;
-                    }
-
-                    int numCols = (this.map.getTiles() != null && this.map.getTiles().length > 0)
-                            ? this.map.getTiles()[0].length
-                            : 0;
-                    if (numCols == 0) {
-                        System.err.println("Map has no columns. Cannot place robot " + className);
-                        continue;
-                    }
-                    int spawnRow = encodedSpawnLocation / numCols;
-                    int spawnCol = encodedSpawnLocation % numCols;
-
-                    int robotSpawnX = spawnCol * Utilities.TILE_SIZE;
-                    int robotSpawnY = spawnRow * Utilities.TILE_SIZE;
-                    Robot robot = Utilities.createRobot(robotSpawnX, robotSpawnY, className);
-                    if (robot != null) {
-                        robots.add(robot);
-                        System.out.println("Added robot: " + className + " at (" + spawnCol + "," + spawnRow + ")");
-                    } else {
-                        System.err.println("Failed to create robot from class: " + className);
-                    }
-
+        try {
+            for (String className : robotFileNames) {
+                int encodedSpawnLocation = smartSpawn();
+                if (encodedSpawnLocation == -1) {
+                    System.err.println("Could not find a valid spawn location for " + className + ". Skipping robot.");
+                    continue;
                 }
-                // classLoader.close(); // Consider if/when to close
-            } catch (Exception e) {
-                System.err.println("Failed to initialize URLClassLoader for robots directory: " + e.getMessage());
-                e.printStackTrace();
-            }
 
-        // Set a preferred size for the game panel to help with layout
+                int numCols = (map.getTiles() != null && map.getTiles().length > 0)
+                        ? map.getTiles()[0].length
+                        : 0;
+                if (numCols == 0) {
+                    System.err.println("Map has no columns. Cannot place robot " + className);
+                    continue;
+                }
+                int spawnRow = encodedSpawnLocation / numCols;
+                int spawnCol = encodedSpawnLocation % numCols;
+
+                int robotSpawnX = spawnCol * Utilities.TILE_SIZE;
+                int robotSpawnY = spawnRow * Utilities.TILE_SIZE;
+                Robot robot = Utilities.createRobot(robotSpawnX, robotSpawnY, className);
+                if (robot != null) {
+                    robots.add(robot);
+                    System.out.println("Added robot: " + className + " at (" + spawnCol + "," + spawnRow + ")");
+                } else {
+                    System.err.println("Failed to create robot from class: " + className);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to initialize URLClassLoader for robots directory: " + e.getMessage());
+            e.printStackTrace();
+        }
+
         setPreferredSize(new Dimension(Utilities.SCREEN_WIDTH, Utilities.SCREEN_HEIGHT));
-        setFocusable(true); // Important for receiving keyboard events if needed later
+        setFocusable(true);
     }
 
-    // Method to update display parameters from GameManager
     public void setDisplayParameters(int width, int height, int cameraX, int cameraY, double zoomFactor) {
-        this.currentWidth = width;
-        this.currentHeight = height;
-        this.currentCameraX = cameraX;
-        this.currentCameraY = cameraY;
-        this.currentZoomFactor = zoomFactor;
+        currentWidth = width;
+        currentHeight = height;
+        currentCameraX = cameraX;
+        currentCameraY = cameraY;
+        currentZoomFactor = zoomFactor;
     }
 
     private int smartSpawn() {
-        if (this.map == null || this.map.getTiles() == null || this.map.getTiles().length == 0
-                || this.map.getTiles()[0].length == 0) {
+        if (map == null || map.getTiles() == null || map.getTiles().length == 0 || map.getTiles()[0].length == 0) {
             System.err.println("SmartSpawn: Map is not properly initialized.");
-            return -1; // Invalid map
+            return -1;
         }
-        int numRows = this.map.getTiles().length;
-        int numCols = this.map.getTiles()[0].length;
+        int numRows = map.getTiles().length;
+        int numCols = map.getTiles()[0].length;
 
-        List<Point> grassLocations = new ArrayList<>(); // Stores Point(col, row)
+        List<Point> grassLocations = new ArrayList<>();
         Set<Point> visitedGrassLocations = new HashSet<>();
         int samplingAttempts = 0;
-        int maxSamplingAttempts = 100; // Try up to 100 times to find 10 distinct grass spots
+        int maxSamplingAttempts = 100;
 
         while (grassLocations.size() < 10 && samplingAttempts < maxSamplingAttempts) {
             int r = randomGenerator.nextInt(numRows);
             int c = randomGenerator.nextInt(numCols);
-            Point candidatePoint = new Point(c, r); // Point.x is col, Point.y is row
+            Point candidatePoint = new Point(c, r);
 
-            if (this.map.getTiles()[r][c] == Utilities.GRASS && !visitedGrassLocations.contains(candidatePoint)) {
+            if (map.getTiles()[r][c] == Utilities.GRASS && !visitedGrassLocations.contains(candidatePoint)) {
                 grassLocations.add(candidatePoint);
                 visitedGrassLocations.add(candidatePoint);
             }
@@ -111,67 +125,56 @@ class Game extends JPanel {
         }
 
         if (grassLocations.isEmpty()) {
-            System.err.println("SmartSpawn: Could not find any grass tiles after " + maxSamplingAttempts
-                    + " random attempts. Scanning map...");
+            System.err.println("SmartSpawn: Could not find any grass tiles after " + maxSamplingAttempts + " random attempts. Scanning map...");
             for (int r = 0; r < numRows; r++) {
                 for (int c = 0; c < numCols; c++) {
-                    if (this.map.getTiles()[r][c] == Utilities.GRASS) {
+                    if (map.getTiles()[r][c] == Utilities.GRASS) {
                         System.out.println("SmartSpawn: Found fallback grass tile at (" + c + "," + r + ")");
-                        return r * numCols + c; // Return first found grass tile
+                        return r * numCols + c;
                     }
                 }
             }
             System.err.println("SmartSpawn: No grass tiles found on the entire map.");
-            return -1; // No grass tiles anywhere
+            return -1;
         }
 
-        // If no robots or powerups, return the first valid grass point found
-        if (this.robots.isEmpty() && this.powerUps.isEmpty()) {
+        if (robots.isEmpty() && powerUps.isEmpty()) {
             Point firstGrass = grassLocations.get(0);
-            return firstGrass.y * numCols + firstGrass.x; // row * numCols + col
+            return firstGrass.y * numCols + firstGrass.x;
         }
 
         Point bestSpawnTile = null;
-        // Initialize to a very small number, as we are looking for the maximum of these minimum distances
-        double largestMinDistanceToNearestEntity = -1.0; 
+        double largestMinDistanceToNearestEntity = -1.0;
 
         for (Point currentTile : grassLocations) {
             double tileCenterX = currentTile.x * Utilities.TILE_SIZE + Utilities.TILE_SIZE / 2.0;
             double tileCenterY = currentTile.y * Utilities.TILE_SIZE + Utilities.TILE_SIZE / 2.0;
             double currentPointMinDistanceToAnEntity = Double.MAX_VALUE;
 
-            // Check distance to robots
-            if (!this.robots.isEmpty()) {
-                for (Robot robot : this.robots) {
-                    if (!robot.isAlive())
+            if (!robots.isEmpty()) {
+                for (Robot robot : robots) {
+                    if (!robot.isAlive()) {
                         continue;
+                    }
                     double robotCenterX = robot.getX() + Utilities.ROBOT_SIZE / 2.0;
                     double robotCenterY = robot.getY() + Utilities.ROBOT_SIZE / 2.0;
                     double dist = Math.hypot(tileCenterX - robotCenterX, tileCenterY - robotCenterY);
                     currentPointMinDistanceToAnEntity = Math.min(currentPointMinDistanceToAnEntity, dist);
                 }
-            } else if (this.powerUps.isEmpty()) { 
-                // No robots and no powerups, this case is handled earlier, but as a safeguard:
-                currentPointMinDistanceToAnEntity = Double.MAX_VALUE; // Effectively makes this point desirable if it's the only one
+            } else if (powerUps.isEmpty()) {
+                currentPointMinDistanceToAnEntity = Double.MAX_VALUE;
             }
 
-
-            // Check distance to powerUps
-            if (!this.powerUps.isEmpty()) {
-                for (PowerUp powerUp : this.powerUps) {
-                    // Assuming PowerUp x,y are tile coordinates
+            if (!powerUps.isEmpty()) {
+                for (PowerUp powerUp : powerUps) {
                     double powerUpCenterX = powerUp.getX() * Utilities.TILE_SIZE + Utilities.POWER_UP_SIZE / 2.0;
                     double powerUpCenterY = powerUp.getY() * Utilities.TILE_SIZE + Utilities.POWER_UP_SIZE / 2.0;
                     double dist = Math.hypot(tileCenterX - powerUpCenterX, tileCenterY - powerUpCenterY);
                     currentPointMinDistanceToAnEntity = Math.min(currentPointMinDistanceToAnEntity, dist);
                 }
-            } else if (this.robots.isEmpty()) {
-                 // No powerups and no robots, this case is handled earlier, but as a safeguard:
+            } else if (robots.isEmpty()) {
                 currentPointMinDistanceToAnEntity = Double.MAX_VALUE;
             }
-            
-            // If there are no entities at all, currentPointMinDistanceToAnEntity will remain Double.MAX_VALUE.
-            // In this scenario, any grass tile is equally good. The first one processed will be chosen.
 
             if (currentPointMinDistanceToAnEntity > largestMinDistanceToNearestEntity) {
                 largestMinDistanceToNearestEntity = currentPointMinDistanceToAnEntity;
@@ -180,136 +183,134 @@ class Game extends JPanel {
         }
 
         if (bestSpawnTile != null) {
-            return bestSpawnTile.y * numCols + bestSpawnTile.x; // row * numCols + col
-        } else {
-            // Fallback if something went wrong, though grassLocations should not be empty
-            // here
-            Point fallbackGrass = grassLocations.get(0);
-            return fallbackGrass.y * numCols + fallbackGrass.x;
+            return bestSpawnTile.y * numCols + bestSpawnTile.x;
         }
+
+        Point fallbackGrass = grassLocations.get(0);
+        return fallbackGrass.y * numCols + fallbackGrass.x;
     }
 
     @Override
     protected void paintComponent(Graphics g) {
-        //long startTime = System.nanoTime();
-        super.paintComponent(g); // Clears the panel
-        if (map != null) {
-            // Pass the integer zoomFactor directly
-            map.display(g, currentWidth, currentHeight, currentCameraX, currentCameraY, currentZoomFactor, robots.get(0).getDangerMap());
-        }
+        super.paintComponent(g);
+        map.display(g, currentWidth, currentHeight, currentCameraX, currentCameraY, currentZoomFactor);
 
-        // Draw robots
-        if (robots != null) {
-            for (Robot robot : robots) {
-                if (robot.getImage() != null && robot.isAlive()) {
-                    int screenX = (int) (robot.getX() * currentZoomFactor - currentCameraX);
-                    int screenY = (int) (robot.getY() * currentZoomFactor - currentCameraY);
-                    int scaledSize = (int) (Utilities.ROBOT_SIZE * currentZoomFactor);
-                    g.drawImage(robot.getImage(), screenX, screenY, scaledSize, scaledSize, null);
-                }
+        for (Robot robot : robots) {
+            if (robot.getImage() != null && robot.isAlive()) {
+                int screenX = (int) (robot.getX() * currentZoomFactor - currentCameraX);
+                int screenY = (int) (robot.getY() * currentZoomFactor - currentCameraY);
+                int scaledSize = (int) (Utilities.ROBOT_SIZE * currentZoomFactor);
+                g.drawImage(robot.getImage(), screenX, screenY, scaledSize, scaledSize, null);
             }
         }
 
-        // Draw projectiles
-        if (projectiles != null) {
-            for (Projectile projectile : projectiles) {
-                if (projectile.getProjectileImage() != null) {
-                    int screenX = (int) (projectile.getX() * currentZoomFactor - currentCameraX);
-                    int screenY = (int) (projectile.getY() * currentZoomFactor - currentCameraY);
-                    int scaledSize = (int) (Utilities.PROJECTILE_SIZE * currentZoomFactor);
-                    g.drawImage(projectile.getProjectileImage(), screenX, screenY, scaledSize, scaledSize, null);
-                }
+        for (Projectile projectile : projectiles) {
+            if (projectile.getProjectileImage() != null) {
+                int screenX = (int) (projectile.getX() * currentZoomFactor - currentCameraX);
+                int screenY = (int) (projectile.getY() * currentZoomFactor - currentCameraY);
+                int scaledSize = (int) (Utilities.PROJECTILE_SIZE * currentZoomFactor);
+                g.drawImage(projectile.getProjectileImage(), screenX, screenY, scaledSize, scaledSize, null);
             }
         }
 
-        // Draw powerUps
-        if (powerUps != null) {
-            for (PowerUp powerUp : powerUps) {
-                if (powerUp.getImage() != null) {
-                    double topLeftXWorld =  powerUp.getX();
-                    double topLeftYWorld = powerUp.getY();
+        for (PowerUp powerUp : powerUps) {
+            if (powerUp.getImage() != null) {
+                int screenX = (int) (powerUp.getX() * currentZoomFactor - currentCameraX);
+                int screenY = (int) (powerUp.getY() * currentZoomFactor - currentCameraY);
+                int scaledSize = (int) (Utilities.POWER_UP_SIZE * currentZoomFactor);
+                g.drawImage(powerUp.getImage(), screenX, screenY, scaledSize, scaledSize, null);
+            }
+        }
+    }
 
-                    int screenX = (int) (topLeftXWorld * currentZoomFactor - currentCameraX);
-                    int screenY = (int) (topLeftYWorld * currentZoomFactor - currentCameraY);
-                    int scaledSize = (int) (Utilities.POWER_UP_SIZE * currentZoomFactor);
-                    
-                    g.drawImage(powerUp.getImage(), screenX, screenY, scaledSize, scaledSize, null);
+    private void rebuildRobotGrid() {
+        robotGrid.clear();
+        for (Robot r : robots) {
+            if (!r.isAlive()) continue;
+            int minCX = r.getX() / Utilities.TILE_SIZE;
+            int maxCX = (r.getX() + Utilities.ROBOT_SIZE - 1) / Utilities.TILE_SIZE;
+            int minCY = r.getY() / Utilities.TILE_SIZE;
+            int maxCY = (r.getY() + Utilities.ROBOT_SIZE - 1) / Utilities.TILE_SIZE;
+            for (int cx = minCX; cx <= maxCX; cx++) {
+                for (int cy = minCY; cy <= maxCY; cy++) {
+                    robotGrid.computeIfAbsent((cx << 16) | cy, k -> new ArrayList<>()).add(r);
                 }
             }
         }
-        //long endTime = System.nanoTime();
-        //long duration = (endTime - startTime); // in nanoseconds
-        // System.out.println("Map drawing time: " + duration / 1_000_000.0 + " ms");
+    }
+
+    public List<Robot> getRobotsInCell(int cellX, int cellY) {
+        List<Robot> list = robotGrid.get((cellX << 16) | cellY);
+        return list != null ? list : Collections.emptyList();
     }
 
     public void step() {
-        final long THINK_TIME_LIMIT_MS = 5; // 5 milliseconds for robot think time
+        final long THINK_TIME_LIMIT_MS = 5;
+
+        // Create one independent snapshot per alive robot in a single pass before any thinking begins.
+        // This ensures no bot can corrupt another bot's view of the world.
+        final HashMap<Robot, Robot.ThinkSnapshot> snapshotMap = new HashMap<>();
+        if (robots != null) {
+            for (Robot robot : robots) {
+                if (robot.isAlive()) {
+                    snapshotMap.put(robot, Robot.createThinkSnapshot(robots, projectiles, map, powerUps, robot));
+                }
+            }
+        }
+        rebuildRobotGrid();
 
         if (robots != null) {
             for (Robot robot : robots) {
                 if (!robot.isAlive()) {
-                    continue; // Skip dead robots
+                    continue;
                 }
 
-                // Execute robot.think() in a separate thread with a timeout
-                Thread thinkThread = new Thread(() -> {
+                final Robot.ThinkSnapshot snapshot = snapshotMap.get(robot);
+                robot.setSuccessfulThink(true);
+                Future<?> thinkFuture = thinkExecutor.submit(() -> {
+                    Robot.beginThinkContext(snapshot, robot);
                     try {
-                        robot.think(this.robots, projectiles, this.map, this.powerUps);
-                        // If think completes without exception, it's initially considered successful
-                        // The timeout check below will confirm this
+                        robot.think(robots, projectiles, map, powerUps);
                     } catch (Exception e) {
-                        System.err
-                                .println("Exception in Robot " + robot.getName() + " think method: " + e.getMessage());
+                        System.err.println("Exception in Robot " + robot.getName() + " think method: " + e.getMessage());
                         e.printStackTrace();
-                        robot.setSuccessfulThink(false); // Mark as unsuccessful due to exception
+                        robot.setSuccessfulThink(false);
+                    } finally {
+                        Robot.endThinkContext();
                     }
                 });
 
-                thinkThread.setName("RobotThinkThread-" + robot.getName());
                 long startTime = System.currentTimeMillis();
-                thinkThread.start();
-
                 try {
-                    thinkThread.join(THINK_TIME_LIMIT_MS); // Wait for the thread to finish with a timeout
+                    thinkFuture.get(THINK_TIME_LIMIT_MS, TimeUnit.MILLISECONDS);
+                } catch (TimeoutException e) {
+                    thinkFuture.cancel(true);
                     long elapsedTime = System.currentTimeMillis() - startTime;
-
-                    if (thinkThread.isAlive()) {
-                        // Thread is still alive, meaning it timed out
-                        thinkThread.interrupt(); // Attempt to interrupt the thread
-                        // It's important that the robot's think() method checks Thread.interrupted()
-                        // or handles InterruptedException to stop gracefully.
-                        // We'll wait a tiny bit more for it to hopefully terminate after interrupt.
-                        thinkThread.join(50); // Give it a moment to die after interrupt
-                        robot.setSuccessfulThink(false);
-                        System.out.println(
-                                "Robot " + robot.getName() + " think method timed out after " + elapsedTime + "ms.");
-                    } else if (robot.isSuccessfulThink()) {
-                        // Thread finished on its own within the time limit AND no exception occurred
-                        // (isSuccessfulThink would be false if an exception happened in the runnable)
-                        robot.setSuccessfulThink(true);
-                    }
-                    // If an exception occurred in thinkThread, successfulThink is already false.
-                } catch (InterruptedException e) {
-                    // The Game thread itself was interrupted while waiting for the thinkThread
-                    System.err.println("Game thread interrupted while waiting for robot think: " + e.getMessage());
                     robot.setSuccessfulThink(false);
-                    Thread.currentThread().interrupt(); // Preserve interrupt status
+                    System.out.println("Robot " + robot.getName() + " think method timed out after " + elapsedTime + "ms.");
+                } catch (InterruptedException e) {
+                    System.err.println("Game thread interrupted while waiting for robot think: " + e.getMessage());
+                    thinkFuture.cancel(true);
+                    robot.setSuccessfulThink(false);
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    robot.setSuccessfulThink(false);
                 }
 
-                // Robot.step() is final and takes Game instance
-                if (robot.isAlive()) { // Robot might have been marked unsuccessful but still needs to step
+                if (robot.isAlive()) {
                     robot.step(this);
+                    rebuildRobotGrid();
                 }
             }
         }
-        //check for powerup colllisions
-          if (robots != null && powerUps != null && !powerUps.isEmpty()) {
-            ArrayList<PowerUp> collectedPowerUps = new ArrayList<>();
+
+        if (robots != null && powerUps != null && !powerUps.isEmpty()) {
+            HashSet<PowerUp> collectedPowerUps = new HashSet<>();
             for (Robot robot : robots) {
                 if (!robot.isAlive()) {
-                    continue; // Skip dead robots
+                    continue;
                 }
-                // Define robot's bounding box (robot's x, y is top-left)
+
                 double robotMinX = robot.getX();
                 double robotMaxX = robot.getX() + Utilities.ROBOT_SIZE;
                 double robotMinY = robot.getY();
@@ -317,80 +318,65 @@ class Game extends JPanel {
 
                 for (PowerUp powerUp : powerUps) {
                     if (collectedPowerUps.contains(powerUp)) {
-                        continue; // Already collected in this step by another robot
+                        continue;
                     }
 
-                    // Define power-up's bounding box.
-                    // powerUp.getX() and powerUp.getY() are its top-left coordinates.
-                    // The four corners of the power-up define its rectangular extent.
                     double p_topLeftX = powerUp.getX();
                     double p_topLeftY = powerUp.getY();
-                    // Assuming POWER_UP_SIZE is for both width and height
                     double p_bottomRightX = p_topLeftX + Utilities.POWER_UP_SIZE;
                     double p_bottomRightY = p_topLeftY + Utilities.POWER_UP_SIZE;
 
-                    // These are the min/max coordinates for the power-up's AABB
                     double powerUpMinX = p_topLeftX;
                     double powerUpMaxX = p_bottomRightX;
                     double powerUpMinY = p_topLeftY;
                     double powerUpMaxY = p_bottomRightY;
 
-                    // Standard AABB collision check:
-                    // Checks if the robot's bounding box overlaps with the power-up's bounding box.
-                    // This inherently considers the full extent of the power-up defined by its corners.
-                    if (robotMaxX > powerUpMinX &&    // Robot's right edge is to the right of power-up's left edge
-                        robotMinX < powerUpMaxX &&    // Robot's left edge is to the left of power-up's right edge
-                        robotMaxY > powerUpMinY &&    // Robot's bottom edge is below power-up's top edge
-                        robotMinY < powerUpMaxY) {    // Robot's top edge is above power-up's bottom edge
-                        
+                    if (robotMaxX > powerUpMinX &&
+                        robotMinX < powerUpMaxX &&
+                        robotMaxY > powerUpMinY &&
+                        robotMinY < powerUpMaxY) {
                         robot.applyPowerUpEffect(powerUp.getType());
                         collectedPowerUps.add(powerUp);
-                        // A robot picks up only one power-up per step
-                        break; 
+                        break;
                     }
                 }
             }
-            powerUps.removeAll(collectedPowerUps); // Remove all collected power-ups from the game
+            powerUps.removeAll(collectedPowerUps);
         }
 
-        // Update projectiles
         if (projectiles != null) {
             for (Projectile projectile : projectiles) {
                 projectile.update(this);
             }
         }
 
-        // Remove dead projectiles
         if (projectiles != null) {
             projectiles.removeIf(projectile -> !projectile.isAlive());
         }
 
-        // add power ups
-        if(Math.random() < Utilities.POWER_UP_SPAWN_CHANCE) {
-           int encodedSpawnLocation = smartSpawn(); // Use smartSpawn to find a location
-           if (encodedSpawnLocation != -1) {
-               int numCols = (this.map.getTiles() != null && this.map.getTiles().length > 0)
-                               ? this.map.getTiles()[0].length
-                               : 0;
-               if (numCols > 0) {
-                   int spawnRow = encodedSpawnLocation / numCols;
-                   int spawnCol = encodedSpawnLocation % numCols;
-                   // PowerUp constructor expects tile coordinates (col, row) or (xTile, yTile)
-                   // Based on PowerUp.java, it seems x and y are tile coordinates.
-                   PowerUp newPowerUp = new PowerUp((spawnCol + .5)*Utilities.TILE_SIZE -Utilities.POWER_UP_SIZE/2, (spawnRow + .5)*Utilities.TILE_SIZE - Utilities.POWER_UP_SIZE/2);
-                   powerUps.add(newPowerUp);
-                   System.out.println("Spawned PowerUp of type " + newPowerUp.getType() + " at tile (" + spawnCol + "," + spawnRow + ")");
-               } else {
-                   System.err.println("Cannot spawn power-up: Map has no columns.");
-               }
-           } else {
-               System.err.println("Cannot spawn power-up: smartSpawn failed to find a location.");
-           }
+        if (Math.random() < Utilities.POWER_UP_SPAWN_CHANCE) {
+            int encodedSpawnLocation = smartSpawn();
+            if (encodedSpawnLocation != -1) {
+                int numCols = (map.getTiles() != null && map.getTiles().length > 0)
+                        ? map.getTiles()[0].length
+                        : 0;
+                if (numCols > 0) {
+                    int spawnRow = encodedSpawnLocation / numCols;
+                    int spawnCol = encodedSpawnLocation % numCols;
+                    PowerUp newPowerUp = new PowerUp(
+                            (spawnCol + 0.5) * Utilities.TILE_SIZE - Utilities.POWER_UP_SIZE / 2,
+                            (spawnRow + 0.5) * Utilities.TILE_SIZE - Utilities.POWER_UP_SIZE / 2);
+                    powerUps.add(newPowerUp);
+                    System.out.println("Spawned PowerUp of type " + newPowerUp.getType() + " at tile (" + spawnCol + "," + spawnRow + ")");
+                } else {
+                    System.err.println("Cannot spawn power-up: Map has no columns.");
+                }
+            } else {
+                System.err.println("Cannot spawn power-up: smartSpawn failed to find a location.");
+            }
         }
 
         duration++;
-        // System.out.println(duration + " steps taken out of " + maxDuration + " max duration.");
-        
     }
 
     public int getDuration() {
@@ -422,12 +408,10 @@ class Game extends JPanel {
     }
 
     public boolean isGameOver() {
-        // Check if the game duration has reached the maximum allowed duration
         if (duration >= maxDuration) {
-            return true; // Game is over due to time limit
+            return true;
         }
 
-        // Check if exactly one robot is alive
         int aliveCount = 0;
         for (Robot robot : robots) {
             if (robot.isAlive()) {
@@ -438,9 +422,8 @@ class Game extends JPanel {
     }
 
     public Robot getWinner() {
-        // If the game is over, return the only remaining alive robot
         if (!isGameOver()) {
-            return null; // Game is not over yet
+            return null;
         }
         if (duration >= maxDuration) {
             int highestHealthPercentage = -1;
@@ -454,14 +437,13 @@ class Game extends JPanel {
                     }
                 }
             }
-            return winner; // Return the robot with the highest health percentage
+            return winner;
         }
         for (Robot robot : robots) {
             if (robot.isAlive()) {
-                return robot; // Return the winning robot
+                return robot;
             }
         }
-        return null; // No winner found, should not happen if game is over
-
+        return null;
     }
 }

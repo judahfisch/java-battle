@@ -21,7 +21,7 @@ application {
 
 // Task to compile robot files automatically
 task compileRobots {
-    description = "Compile all classes that extend the Robot class"
+    description = "Compile all classes that extend the RobotFilter class"
     
     doLast {
         File sourceDir = file('src/main/java/app/javaJostle')
@@ -29,13 +29,13 @@ task compileRobots {
 
         outputDir.mkdirs()
 
-        // Find all Java files that extend Robot
+        // Find all Java files that extend RobotFilter
         List<File> robotSources = sourceDir.listFiles()
             .findAll { it.isFile() && it.name.endsWith('.java') }
-            .findAll { it.text.matches('(?s).*public\\s+class\\s+\\w+\\s+extends\\s+Robot.*') }
+            .findAll { it.text.matches('(?s).*public\\s+class\\s+\\w+\\s+extends\\s+RobotFilter.*') }
 
         if (robotSources.isEmpty()) {
-            println "No classes extending Robot found to compile."
+            println "No classes extending RobotFilter found to compile."
             return
         }
 
@@ -52,6 +52,7 @@ task compileRobots {
             '-d', outputDir.absolutePath,
             '-cp', sourceRoot.absolutePath,
             '-sourcepath', sourceRoot.absolutePath,
+            '--release', '11',
             '-implicit:none'
         ] + robotSources.collect { it.absolutePath }
 

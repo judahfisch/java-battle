@@ -7,11 +7,15 @@ import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.imageio.ImageIO;
 
 public class Utilities {
-    public static BufferedImage DANGER_IMAGE;
     public static BufferedImage WALL_IMAGE;
     public static BufferedImage GRASS_IMAGE;
     public static BufferedImage MUD_IMAGE;
@@ -21,12 +25,11 @@ public class Utilities {
     public static BufferedImage SPEED_PACK_IMAGE;
     public static BufferedImage ATTACK_PACK_IMAGE;
 
-    public final static int WALL = 0;
-    public final static int GRASS = 1;
-    public final static int MUD = 2;
-    public final static int Danger = 3;
+    public static final int WALL = 0;
+    public static final int GRASS = 1;
+    public static final int MUD = 2;
 
-    public final static double POWER_UP_SPAWN_CHANCE = .003;
+    public static final double POWER_UP_SPAWN_CHANCE = 0.003;
 
     public static final int SCREEN_WIDTH = 800;
     public static final int SCREEN_HEIGHT = 600;
@@ -35,31 +38,43 @@ public class Utilities {
     public static final int POWER_UP_SIZE = 20; // Default power-up size
     public static final int ROBOT_SIZE = 28; // Default robot size
 
-    public static ArrayList<Integer> keysPressed = new ArrayList<Integer>();
+    public static ArrayList<Integer> keysPressed = new ArrayList<>();
+    
+    // Static cache for loaded robot classes and persistent URLClassLoader
+    private static URLClassLoader robotClassLoader = null;
+    private static Map<String, Class<?>> loadedRobotClasses = new HashMap<>();
+    private static final Map<String, BufferedImage> imageCache = new ConcurrentHashMap<>();
 
     public static BufferedImage loadImage(String imgName) {
+        if (imgName == null) {
+            return null;
+        }
+
+        BufferedImage cached = imageCache.get(imgName);
+        if (cached != null) {
+            return cached;
+        }
+
         try {
             // Ensure the full path is constructed correctly
             BufferedImage img = ImageIO.read(new File("src/main/resources/images/" + imgName));
-            return cropToContent(img);
+            BufferedImage cropped = cropToContent(img);
+            imageCache.put(imgName, cropped);
+            return cropped;
         } catch (IOException e) {
             System.err.println("Failed to load image: " + imgName + " - " + e.getMessage());
             e.printStackTrace();
-            return null; // Return null if loading fails
+            return null;
         }
     }
 
     public static void loadImages() {
-        // Use the loadImage method for each image
-        DANGER_IMAGE = loadImage("dangerMap.png");
         WALL_IMAGE = loadImage("wall.png");
         GRASS_IMAGE = loadImage("grass.png");
         MUD_IMAGE = loadImage("mud.png");
         ROBOT_ERROR = loadImage("robotError.png");
         DEFAULT_PROJECTILE_IMAGE = loadImage("defaultProjectile.png");
 
-        // Optional: Add checks here if any image failed to load, though loadImage
-        // already prints errors
         if (WALL_IMAGE == null) {
             System.err.println("WALL_IMAGE could not be loaded.");
         }
@@ -114,7 +129,7 @@ public class Utilities {
     public static void handleKeyReleased(int keyCode) {
         for (int i = 0; i < keysPressed.size(); i++) {
             if (keysPressed.get(i) == keyCode) {
-                keysPressed.remove(i); // Remove using index for clarity
+                keysPressed.remove(i);
                 break;
             }
         }
@@ -125,9 +140,7 @@ public class Utilities {
 
     // Test helper methods
     public static void resetKeyStates() {
-        for (int i = 0; i < testKeyStates.length; i++) {
-            testKeyStates[i] = false;
-        }
+        Arrays.fill(testKeyStates, false);
     }
 
     public static void setKeyPressed(int keyCode, boolean isPressed) {
@@ -136,14 +149,12 @@ public class Utilities {
         }
     }
 
-    // Modify the existing isKeyPressed method to use the test states in test mode
     private static boolean inTestMode = false;
 
     public static void setTestMode(boolean enabled) {
         inTestMode = enabled;
     }
 
-    // Update the existing isKeyPressed method
     public static boolean isKeyPressed(int keyCode) {
         if (inTestMode) {
             return keyCode < testKeyStates.length && testKeyStates[keyCode];
@@ -153,74 +164,113 @@ public class Utilities {
         }
     }
 
-    public static Robot createRobot(int x, int y, String className) {
-        // Attempt to define robotsResourceRootUrl from a specific source directory
-        File specificSrcRobotsDir = new File("src/main/resources/robots"); // Path relative to project root
-        URL robotsResourceRootUrl = null;
-
-        if (specificSrcRobotsDir.exists() && specificSrcRobotsDir.isDirectory()) {
-            try {
-                robotsResourceRootUrl = specificSrcRobotsDir.toURI().toURL();
-                // Optional: Add a log to confirm which path is being used
-                // System.out.println("Attempting to use direct src path for robots: " + robotsResourceRootUrl);
-            } catch (java.net.MalformedURLException e) {
-                System.err.println("Error creating URL for src robots directory: " + specificSrcRobotsDir.getAbsolutePath() + " - " + e.getMessage());
-                // robotsResourceRootUrl will remain null, handled by later checks
-            }
+    /**
+     * Preload all robot classes from the robots resource directory.
+     * This should be called once during application startup to make all robots available.
+     */
+    public static void preloadRobotClasses() {
+        File robotsResourceDir = new File("src/main/resources/robots");
+        loadedRobotClasses.clear();
+        
+        if (!robotsResourceDir.exists() || !robotsResourceDir.isDirectory()) {
+            System.err.println("Robots resource directory not found: " + robotsResourceDir.getAbsolutePath());
+            return;
         }
-
-        // For robot classes, attempt to load them using URLClassLoader
-        // from the '/robots' resource directory.
-        if (robotsResourceRootUrl == null) {
-            System.err.println("Robots resource directory '/robots' not found in classpath. Cannot dynamically load: " + className);
-            // As a fallback, try to load the class directly from the classpath.
-            // This might be useful if some robots are packaged normally.
-            try {
-                System.out.println("Fallback: Attempting to load robot class directly from classpath: app.javaJostle." + className);
-                Class<?> loadedClass = Class.forName("app.javaJostle." + className);
-                if (Robot.class.isAssignableFrom(loadedClass)) {
-                    Constructor<?> constructor = loadedClass.getConstructor(int.class, int.class);
-                    return (Robot) constructor.newInstance(x, y);
-                } else {
-                    System.err.println("Class app.JavaJostle." + className + " (loaded from classpath) does not extend Robot.");
-                    return null; // Class found but not a Robot or doesn't have the right constructor
-                }
-            } catch (Exception directLoadException) {
-                System.err.println("Fallback failed: Could not load app.JavaJostle." + className + " directly from classpath: " + directLoadException.getMessage());
-                return null; // Fallback loading failed
-            }
-        }
-
-
-        // If robotsResourceRootUrl is valid, proceed with URLClassLoader
+        
         try {
-            URL[] urls = { robotsResourceRootUrl };
-            // Using Utilities.class.getClassLoader() as the parent.
-            // The original code used Game.class.getClassLoader().
-            URLClassLoader classLoader = new URLClassLoader(urls, Utilities.class.getClassLoader());
-           
-            System.out.println("Attempting to load robot class via URLClassLoader: app.JavaJostle." + className + " from " + robotsResourceRootUrl);
-            // Assumes robot classes are in the 'app.JavaJostle' package within the /robots directory
-            Class<?> loadedClass = classLoader.loadClass("app.javaJostle." + className);
-
-            if (Robot.class.isAssignableFrom(loadedClass)) {
-                Constructor<?> constructor = loadedClass.getConstructor(int.class, int.class);
-                Robot robot = (Robot) constructor.newInstance(x, y);
-                classLoader.close();
-                return robot;
-            } else {
-                System.err.println("Class " + className + " (loaded via URLClassLoader from " + robotsResourceRootUrl + ") does not extend Robot.");
-                classLoader.close();
+            // Create the persistent URLClassLoader if not already created
+            if (robotClassLoader == null) {
+                URL robotsUrl = robotsResourceDir.toURI().toURL();
+                robotClassLoader = new URLClassLoader(new URL[] { robotsUrl }, Utilities.class.getClassLoader());
+                System.out.println("Created persistent robot class loader: " + robotsUrl);
             }
-        } catch (ClassNotFoundException e) {
-            System.err.println("Robot class not found via URLClassLoader: app.JavaJostle." + className + " in " + robotsResourceRootUrl + " - " + e.getMessage());
-        } catch (NoSuchMethodException e) {
-            System.err.println("Constructor (int, int) not found for " + className + " (loaded via URLClassLoader from " + robotsResourceRootUrl + ") - " + e.getMessage());
+            
+            // Recursively find and load all .class files
+            loadClassesFromDirectory(robotsResourceDir, "");
+            
+            System.out.println("Preloaded " + loadedRobotClasses.size() + " robot classes");
         } catch (Exception e) {
-            System.err.println("Error loading or instantiating " + className + " via URLClassLoader from " + robotsResourceRootUrl + ": " + e.getMessage());
+            System.err.println("Failed to preload robot classes: " + e.getMessage());
             e.printStackTrace();
         }
-        // Return null if loading failed.
+    }
+    
+    /**
+     * Recursively load classes from a directory.
+     */
+    private static void loadClassesFromDirectory(File dir, String packagePrefix) {
+        if (!dir.isDirectory()) {
+            return;
+        }
+        
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return;
+        }
+        
+        for (File file : files) {
+            if (file.isDirectory()) {
+                // Recurse into subdirectories
+                String newPackagePrefix = packagePrefix.isEmpty() ? file.getName() : packagePrefix + "." + file.getName();
+                loadClassesFromDirectory(file, newPackagePrefix);
+            } else if (file.isFile() && file.getName().endsWith(".class")) {
+                // Load the class
+                String className = file.getName().substring(0, file.getName().length() - ".class".length());
+                String fullClassName = packagePrefix.isEmpty() ? className : packagePrefix + "." + className;
+                
+                try {
+                    Class<?> loadedClass = robotClassLoader.loadClass(fullClassName);
+                    if (!RobotFilter.class.isAssignableFrom(loadedClass)) {
+                        continue;
+                    }
+
+                    loadedClass.getConstructor(int.class, int.class);
+                    loadedRobotClasses.put(className, loadedClass); // Store only verified robot filters
+                    System.out.println("Preloaded robot filter: " + fullClassName + " (cached as " + className + ")");
+                } catch (Throwable t) {
+                    System.err.println("Failed to preload class " + fullClassName + ": " + t.getMessage());
+                }
+            }
+        }
+    }
+
+    public static ArrayList<String> getLoadedRobotNames() {
+        ArrayList<String> names = new ArrayList<>(loadedRobotClasses.keySet());
+        Collections.sort(names);
+        return names;
+    }
+    
+    /**
+     * Get a preloaded robot class by simple name.
+     */
+    public static Class<?> getRobotClass(String className) {
+        return loadedRobotClasses.get(className);
+    }
+
+    public static Robot createRobot(int x, int y, String className) {
+        // Get the preloaded class from cache
+        Class<?> loadedClass = getRobotClass(className);
+        
+        if (loadedClass == null) {
+            System.err.println("Robot class not preloaded: " + className);
+            return null;
+        }
+        
+        try {
+            // loadedRobotClasses only contains validated RobotFilter classes.
+            Constructor<?> constructor = loadedClass.getConstructor(int.class, int.class);
+            RobotFilter filter = (RobotFilter) constructor.newInstance(x, y);
+            Robot robot = Robot.createFromFilter(x, y, filter);
+
+            System.out.println("Created robot instance: " + className);
+            return robot;
+        } catch (NoSuchMethodException e) {
+            System.err.println("Constructor (int, int) not found for " + className + ": " + e.getMessage());
+        } catch (Exception e) {
+            System.err.println("Error instantiating robot class " + className + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+        
         return null;
     }
 }

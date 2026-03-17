@@ -4,6 +4,22 @@ import java.util.ArrayList;
 import java.awt.image.BufferedImage;
 
 public abstract class Robot {
+    public static final class ThinkSnapshot {
+        private final ArrayList<Robot> robots;
+        private final ArrayList<Projectile> projectiles;
+        private final Map map;
+        private final ArrayList<PowerUp> powerUps;
+
+        private ThinkSnapshot(ArrayList<Robot> robots, ArrayList<Projectile> projectiles, Map map, ArrayList<PowerUp> powerUps) {
+            this.robots = robots;
+            this.projectiles = projectiles;
+            this.map = map;
+            this.powerUps = powerUps;
+        }
+    }
+
+    private static final ThreadLocal<ThinkSnapshot> ACTIVE_THINK_SNAPSHOT = new ThreadLocal<>();
+
     // attribute points
     private int healthPoints;
     private int speedPoints;
@@ -13,7 +29,7 @@ public abstract class Robot {
     // attribute calculated values
     private int health;
     private int maxHealth;
-    private int speed; // This is an int
+    private int speed;
     private int attackMaxCooldown;
     protected int attackCurCooldown;
     private int projectileSpeed;
@@ -98,22 +114,45 @@ public abstract class Robot {
         this.originalProjectileDamage = this.projectileDamage;
     }
 
-    public boolean canAttack() {
+    public final boolean canAttack() {
         return attackCurCooldown <= 0;
     }
 
-    protected void shootAtLocation(int x, int y) {
+    public static Robot createFromFilter(int x, int y, RobotFilter filter) {
+        if (filter == null) {
+            throw new IllegalArgumentException("RobotFilter cannot be null");
+        }
+        return new FilterRobot(x, y, filter);
+    }
+
+    public static ThinkSnapshot createThinkSnapshot(ArrayList<Robot> robots, ArrayList<Projectile> projectiles, Map map, ArrayList<PowerUp> powerUps, Robot selfRobot) {
+        java.util.HashMap<Robot, Robot> ownerMap = new java.util.HashMap<>();
+        ArrayList<Robot> robotViews = new ReadOnlyArrayList<>(deepCopyRobots(robots, ownerMap, selfRobot));
+        ArrayList<Projectile> projectileViews = new ReadOnlyArrayList<>(deepCopyProjectiles(projectiles, ownerMap, selfRobot));
+        Map mapView = deepCopyMap(map);
+        ArrayList<PowerUp> powerUpViews = new ReadOnlyArrayList<>(deepCopyPowerUps(powerUps));
+        return new ThinkSnapshot(robotViews, projectileViews, mapView, powerUpViews);
+    }
+
+    public static void beginThinkContext(ThinkSnapshot snapshot, Robot selfRobot) {
+        ACTIVE_THINK_SNAPSHOT.set(snapshot);
+    }
+
+    public static void endThinkContext() {
+        ACTIVE_THINK_SNAPSHOT.remove();
+    }
+
+    private static ThinkSnapshot currentThinkSnapshot() {
+        return ACTIVE_THINK_SNAPSHOT.get();
+    }
+
+    protected final void shootAtLocation(int x, int y) {
         xTarget = x;
         yTarget = y;
         shoot = true;
     }
 
-    public boolean[][] getDangerMap() {
-        return new boolean[1][1];
-    }
-
-    public abstract void think(ArrayList<Robot> robots, ArrayList<Projectile> projectiles, Map map,
-            ArrayList<PowerUp> powerups);
+    public abstract void think(final ArrayList<Robot> robots, final ArrayList<Projectile> projectiles, final Map map, final ArrayList<PowerUp> powerups);
 
     private boolean isPointOkay(int pX, int pY, Map gameMap, ArrayList<Robot> allRobots) {
         if (gameMap == null || gameMap.getTiles() == null)
@@ -168,10 +207,24 @@ public abstract class Robot {
         int c4x = targetX + Utilities.ROBOT_SIZE - 1;
         int c4y = targetY + Utilities.ROBOT_SIZE - 1;
 
-        return isPointOkay(c1x, c1y, game.getMap(), game.getRobots()) &&
-                isPointOkay(c2x, c2y, game.getMap(), game.getRobots()) &&
-                isPointOkay(c3x, c3y, game.getMap(), game.getRobots()) &&
-                isPointOkay(c4x, c4y, game.getMap(), game.getRobots());
+        // Use spatial grid: only check robots in cells this bounding box touches
+        int minCX = targetX / Utilities.TILE_SIZE;
+        int maxCX = (targetX + Utilities.ROBOT_SIZE - 1) / Utilities.TILE_SIZE;
+        int minCY = targetY / Utilities.TILE_SIZE;
+        int maxCY = (targetY + Utilities.ROBOT_SIZE - 1) / Utilities.TILE_SIZE;
+        ArrayList<Robot> nearbyRobots = new ArrayList<>();
+        for (int cx = minCX; cx <= maxCX; cx++) {
+            for (int cy = minCY; cy <= maxCY; cy++) {
+                for (Robot r : game.getRobotsInCell(cx, cy)) {
+                    if (!nearbyRobots.contains(r)) nearbyRobots.add(r);
+                }
+            }
+        }
+
+        return isPointOkay(c1x, c1y, game.getMap(), nearbyRobots) &&
+                isPointOkay(c2x, c2y, game.getMap(), nearbyRobots) &&
+                isPointOkay(c3x, c3y, game.getMap(), nearbyRobots) &&
+                isPointOkay(c4x, c4y, game.getMap(), nearbyRobots);
     }
 
     private boolean isTileMud(int currentX, int currentY, Map gameMap) {
@@ -202,7 +255,7 @@ public abstract class Robot {
         }
         return false;
     }
-    public void applyPowerUpEffect(String type) {
+    public final void applyPowerUpEffect(String type) {
         System.out.println(this.name + " picked up " + type + " power-up!");
         switch (type) {
             case "health":
@@ -298,80 +351,326 @@ public abstract class Robot {
         shoot = false;
     }
 
-    public int getHealth() {
+    public final int getHealth() {
         return health;
     }
 
-    public int getMaxHealth() {
+    public final int getMaxHealth() {
         return maxHealth;
     }
 
-    public int getSpeed() {
+    public final int getSpeed() {
         return speed;
     }
 
-    public String getName() {
+    public final String getName() {
         return name;
     }
 
-    public BufferedImage getImage() {
+    public final BufferedImage getImage() {
         return image;
     }
 
-    public BufferedImage getProjectileImage() {
+    public final BufferedImage getProjectileImage() {
         return projectileImage;
     }
 
-    public int getX() {
+    public final int getX() {
         return x;
     }
 
-    public int getY() {
+    public final int getY() {
         return y;
     }
 
-    public int getHealthPoints() {
+    public final int getXMovement() {
+        return xMovement;
+    }
+
+    public final int getYMovement() {
+        return yMovement;
+    }
+
+    public final int getHealthPoints() {
         return healthPoints;
     }
 
-    public int getSpeedPoints() {
+    public final int getSpeedPoints() {
         return speedPoints;
     }
 
-    public int getAttackSpeedPoints() {
+    public final int getAttackSpeedPoints() {
         return attackSpeedPoints;
     }
 
-    public int getProjectileStrengthPoints() {
+    public final int getProjectileStrengthPoints() {
         return projectileStrengthPoints;
     }
 
-    public void takeDamage(int amount) {
+    public final void takeDamage(int amount) {
         this.health -= amount;
         if (this.health < 0) {
             this.health = 0;
         }
     }
 
-    public boolean isAlive() {
+    public final boolean isAlive() {
         return this.health > 0;
     }
 
-    public void setSuccessfulThink(boolean successful) {
+    public boolean isSelf() {
+        return false;
+    }
+
+    public final void setSuccessfulThink(boolean successful) {
        
         this.successfulThink = successful;
     }
 
-    public boolean isSuccessfulThink() {
+    public final boolean isSuccessfulThink() {
         return successfulThink;
     }
 
     // Getters for power-up effects
-    public boolean hasSpeedBoost() {
+    public final boolean hasSpeedBoost() {
         return speedBoostDuration > 0;
     }
 
-    public boolean hasAttackBoost() {
+    public final boolean hasAttackBoost() {
         return attackBoostDuration > 0;
+    }
+
+    private static ArrayList<Robot> deepCopyRobots(ArrayList<Robot> source, java.util.HashMap<Robot, Robot> ownerMap, Robot selfRobot) {
+        ArrayList<Robot> copies = new ArrayList<>();
+        if (source == null) {
+            return copies;
+        }
+
+        for (Robot robot : source) {
+            RobotView copy = new RobotView(robot, robot == selfRobot);
+            copyState(copy, robot);
+            ownerMap.put(robot, copy);
+            copies.add(copy);
+        }
+        return copies;
+    }
+
+    private static void copyState(Robot target, Robot source) {
+        target.health = source.health;
+        target.maxHealth = source.maxHealth;
+        target.speed = source.speed;
+        target.attackCurCooldown = source.attackCurCooldown;
+        target.x = source.x;
+        target.y = source.y;
+        target.xMovement = source.xMovement;
+        target.yMovement = source.yMovement;
+        target.successfulThink = source.successfulThink;
+    }
+
+    private static ArrayList<Projectile> deepCopyProjectiles(ArrayList<Projectile> source, java.util.HashMap<Robot, Robot> ownerMap, Robot selfRobot) {
+        ArrayList<Projectile> copies = new ArrayList<>();
+        if (source == null) {
+            return copies;
+        }
+
+        for (Projectile projectile : source) {
+            Robot ownerCopy = ownerMap.get(projectile.getOwner());
+            if (ownerCopy == null && projectile.getOwner() != null) {
+                ownerCopy = new RobotView(projectile.getOwner(), projectile.getOwner() == selfRobot);
+                copyState(ownerCopy, projectile.getOwner());
+            }
+
+            int targetX = (int) Math.round(projectile.getX() + Math.cos(projectile.getAngle()) * 1000.0);
+            int targetY = (int) Math.round(projectile.getY() + Math.sin(projectile.getAngle()) * 1000.0);
+            Projectile copy = new Projectile(
+                    projectile.getX(),
+                    projectile.getY(),
+                    targetX,
+                    targetY,
+                    projectile.getProjectileSpeed(),
+                    projectile.getProjectileDamage(),
+                    projectile.getProjectileImage(),
+                    ownerCopy);
+            if (!projectile.isAlive()) {
+                copy.destroy();
+            }
+            copies.add(copy);
+        }
+        return copies;
+    }
+
+    private static Map deepCopyMap(Map source) {
+        if (source == null || source.getTiles() == null) {
+            return new Map(new int[0][0]);
+        }
+
+        int[][] srcTiles = source.getTiles();
+        int[][] copiedTiles = new int[srcTiles.length][];
+        for (int row = 0; row < srcTiles.length; row++) {
+            copiedTiles[row] = srcTiles[row].clone();
+        }
+        return new Map(copiedTiles);
+    }
+
+    private static ArrayList<PowerUp> deepCopyPowerUps(ArrayList<PowerUp> source) {
+        ArrayList<PowerUp> copies = new ArrayList<>();
+        if (source == null) {
+            return copies;
+        }
+
+        for (PowerUp powerUp : source) {
+            copies.add(new PowerUp(powerUp.getX(), powerUp.getY(), powerUp.getType(), powerUp.getImage()));
+        }
+        return copies;
+    }
+
+    private static final class ReadOnlyArrayList<E> extends ArrayList<E> {
+        private ReadOnlyArrayList(java.util.Collection<? extends E> source) {
+            super(source);
+        }
+
+        @Override
+        public boolean add(E e) {
+            throw new UnsupportedOperationException("Snapshot list is read-only");
+        }
+
+        @Override
+        public void add(int index, E element) {
+            throw new UnsupportedOperationException("Snapshot list is read-only");
+        }
+
+        @Override
+        public boolean addAll(java.util.Collection<? extends E> c) {
+            throw new UnsupportedOperationException("Snapshot list is read-only");
+        }
+
+        @Override
+        public boolean addAll(int index, java.util.Collection<? extends E> c) {
+            throw new UnsupportedOperationException("Snapshot list is read-only");
+        }
+
+        @Override
+        public E remove(int index) {
+            throw new UnsupportedOperationException("Snapshot list is read-only");
+        }
+
+        @Override
+        public boolean remove(Object o) {
+            throw new UnsupportedOperationException("Snapshot list is read-only");
+        }
+
+        @Override
+        public boolean removeAll(java.util.Collection<?> c) {
+            throw new UnsupportedOperationException("Snapshot list is read-only");
+        }
+
+        @Override
+        public boolean retainAll(java.util.Collection<?> c) {
+            throw new UnsupportedOperationException("Snapshot list is read-only");
+        }
+
+        @Override
+        public void clear() {
+            throw new UnsupportedOperationException("Snapshot list is read-only");
+        }
+
+        @Override
+        public E set(int index, E element) {
+            throw new UnsupportedOperationException("Snapshot list is read-only");
+        }
+
+        @Override
+        protected void removeRange(int fromIndex, int toIndex) {
+            throw new UnsupportedOperationException("Snapshot list is read-only");
+        }
+    }
+
+    private static final class RobotView extends Robot {
+        private final boolean self;
+
+        private RobotView(Robot source, boolean self) {
+            super(source.getX(), source.getY(),
+                    source.getHealthPoints(),
+                    source.getSpeedPoints(),
+                    source.getAttackSpeedPoints(),
+                    source.getProjectileStrengthPoints(),
+                    source.getName(),
+                    "robotError.png",
+                    "defaultProjectile.png");
+            this.self = self;
+        }
+
+        @Override
+        public void think(final ArrayList<Robot> robots, final ArrayList<Projectile> projectiles, final Map map,
+            final ArrayList<PowerUp> powerups) {
+            // Snapshot robot; no thinking behavior.
+        }
+
+        @Override
+        public boolean isSelf() {
+            return self;
+        }
+    }
+
+    private static final class FilterRobot extends Robot {
+        private final RobotFilter filter;
+
+        private FilterRobot(int x, int y, RobotFilter filter) {
+            super(x, y,
+                    filter.getHealthPoints(),
+                    filter.getSpeedPoints(),
+                    filter.getAttackSpeedPoints(),
+                    filter.getProjectileStrengthPoints(),
+                    filter.getName(),
+                    filter.getImageName(),
+                    filter.getProjectileImageName());
+            this.filter = filter;
+        }
+
+        @Override
+        public void think(final ArrayList<Robot> robots,
+            final ArrayList<Projectile> projectiles,
+            final Map map,
+            final ArrayList<PowerUp> powerups) {
+            ThinkSnapshot snapshot = currentThinkSnapshot();
+            ArrayList<Robot> robotViews;
+            ArrayList<Projectile> projectileViews;
+            Map mapView;
+            ArrayList<PowerUp> powerUpViews;
+
+            if (snapshot != null) {
+                robotViews = snapshot.robots;
+                projectileViews = snapshot.projectiles;
+                mapView = snapshot.map;
+                powerUpViews = snapshot.powerUps;
+            } else {
+                java.util.HashMap<Robot, Robot> ownerMap = new java.util.HashMap<>();
+                robotViews = deepCopyRobots(robots, ownerMap, this);
+                projectileViews = deepCopyProjectiles(projectiles, ownerMap, this);
+                mapView = deepCopyMap(map);
+                powerUpViews = deepCopyPowerUps(powerups);
+            }
+
+            filter.canAttack = canAttack();
+            filter.x = getX();
+            filter.y = getY();
+            filter.speed = getSpeed();
+            filter.health = getHealth();
+            filter.maxHealth = getMaxHealth();
+
+            filter.think(robotViews, projectileViews, mapView, powerUpViews);
+
+            xMovement = filter.getXMovement();
+            yMovement = filter.getYMovement();
+            if (filter.canShoot()) {
+                shootAtLocation(filter.getXTarget(), filter.getYTarget());
+            }
+
+            filter.xMovement = 0;
+            filter.yMovement = 0;
+            filter.shoot = false;
+            filter.xTarget = 0;
+            filter.yTarget = 0;
+        }
     }
 }

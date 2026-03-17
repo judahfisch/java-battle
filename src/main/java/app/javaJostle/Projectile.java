@@ -6,12 +6,9 @@ import java.util.ArrayList;
 public class Projectile {
     private double x;
     private double y;
-    // private double speed; // Replaced by projectileSpeed
-    private double angle; // Will be calculated
+    private double angle;
     private Robot owner;
     private boolean alive = true;
-
-    // New fields based on the constructor
     private int projectileSpeed;
     private int projectileDamage;
     private BufferedImage projectileImage;
@@ -31,10 +28,10 @@ public class Projectile {
 
     public void update(Game game) {
         if (!alive) {
-            return; // Do nothing if already destroyed
+            return;
         }
 
-        int subSteps = 5; // Number of steps to break the movement into for collision detection
+        int subSteps = 5;
         double totalDx = this.projectileSpeed * Math.cos(this.angle);
         double totalDy = this.projectileSpeed * Math.sin(this.angle);
 
@@ -43,24 +40,14 @@ public class Projectile {
 
         for (int i = 0; i < subSteps; i++) {
             if (!alive)
-                break; // Stop if destroyed in a previous sub-step
+                break;
 
             double currentProjectileX = x + subStepDx;
             double currentProjectileY = y + subStepDy;
 
-            // Define the four corners of the projectile for collision detection
-            // Top-left is (currentProjectileX, currentProjectileY)
-            // Top-right is (currentProjectileX + PROJECTILE_SIZE -1, currentProjectileY)
-            // Bottom-left is (currentProjectileX, currentProjectileY + PROJECTILE_SIZE -1)
-            // Bottom-right is (currentProjectileX + PROJECTILE_SIZE -1, currentProjectileY + PROJECTILE_SIZE -1)
-            // We will check these points. Note: PROJECTILE_SIZE is the dimension.
-            // For tile checking, we care about any point within the projectile's area.
-            // For robot checking, we'll use AABB intersection.
-
             // 1. Wall Collision Check
             Map map = game.getMap();
             if (map != null && map.getTiles() != null && map.getTiles().length > 0 && map.getTiles()[0].length > 0) {
-                // Points to check for wall collision (corners of the projectile)
                 double[] pX = {
                     currentProjectileX, 
                     currentProjectileX + Utilities.PROJECTILE_SIZE -1, 
@@ -78,43 +65,34 @@ public class Projectile {
                     int tileCol = (int) (pX[corner] / Utilities.TILE_SIZE);
                     int tileRow = (int) (pY[corner] / Utilities.TILE_SIZE);
 
-                    // Check map boundaries and wall collision for each corner
                     if (tileRow < 0 || tileRow >= map.getTiles().length ||
                             tileCol < 0 || tileCol >= map.getTiles()[0].length ||
                             map.getTiles()[tileRow][tileCol] == Utilities.WALL) {
-                        this.destroy();
-                        return; // Projectile is destroyed, stop further processing
+                        destroy();
+                        return;
                     }
                 }
             }
 
-            // 2. Robot Collision Check (AABB Intersection)
-            ArrayList<Robot> robots = game.getRobots();
-            if (robots != null) {
-                for (Robot robot : robots) {
-                    if (robot.isAlive() && robot != this.owner) {
-                        double robotX = robot.getX();
-                        double robotY = robot.getY();
-                        
-                        // Projectile's bounding box
-                        double projX1 = currentProjectileX;
-                        double projY1 = currentProjectileY;
-                        double projX2 = currentProjectileX + Utilities.PROJECTILE_SIZE;
-                        double projY2 = currentProjectileY + Utilities.PROJECTILE_SIZE;
-
-                        // Robot's bounding box
-                        double robX1 = robotX;
-                        double robY1 = robotY;
-                        double robX2 = robotX + Utilities.ROBOT_SIZE;
-                        double robY2 = robotY + Utilities.ROBOT_SIZE;
-
-                        // Check for AABB intersection
-                        if (projX1 < robX2 && projX2 > robX1 &&
-                            projY1 < robY2 && projY2 > robY1) {
-                            
+            // 2. Robot Collision Check using spatial grid
+            int minCX = (int) currentProjectileX / Utilities.TILE_SIZE;
+            int maxCX = (int) (currentProjectileX + Utilities.PROJECTILE_SIZE - 1) / Utilities.TILE_SIZE;
+            int minCY = (int) currentProjectileY / Utilities.TILE_SIZE;
+            int maxCY = (int) (currentProjectileY + Utilities.PROJECTILE_SIZE - 1) / Utilities.TILE_SIZE;
+            ArrayList<Robot> checkedRobots = new ArrayList<>();
+            for (int cx = minCX; cx <= maxCX; cx++) {
+                for (int cy = minCY; cy <= maxCY; cy++) {
+                    for (Robot robot : game.getRobotsInCell(cx, cy)) {
+                        if (checkedRobots.contains(robot)) continue;
+                        checkedRobots.add(robot);
+                        if (!robot.isAlive() || robot == this.owner) continue;
+                        if (currentProjectileX < robot.getX() + Utilities.ROBOT_SIZE &&
+                            currentProjectileX + Utilities.PROJECTILE_SIZE > robot.getX() &&
+                            currentProjectileY < robot.getY() + Utilities.ROBOT_SIZE &&
+                            currentProjectileY + Utilities.PROJECTILE_SIZE > robot.getY()) {
                             robot.takeDamage(this.projectileDamage);
-                            this.destroy();
-                            return; // Projectile is destroyed, stop further processing
+                            destroy();
+                            return;
                         }
                     }
                 }
@@ -158,6 +136,7 @@ public class Projectile {
     public BufferedImage getProjectileImage() {
         return projectileImage;
     }
+
     public boolean isAlive() {
         return alive;
     }

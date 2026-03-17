@@ -9,6 +9,10 @@ import java.util.ArrayList;
 public class Map {
     private int[][] tiles;
 
+    public Map(int[][] tiles) {
+        this.tiles = tiles;
+    }
+
     public Map(String name) {
         // load the map from a file or resource
         ArrayList<int[]> rows = new ArrayList<>();
@@ -46,7 +50,7 @@ public class Map {
         return tiles;
     }
 
-    public void display(Graphics g, int panelWidth, int panelHeight, int cameraX, int cameraY, double zoomFactor, boolean[][] dangerMap) {
+    public void display(Graphics g, int panelWidth, int panelHeight, int cameraX, int cameraY, double zoomFactor) {
         if (tiles == null || tiles.length == 0) {
             return;
         }
@@ -75,17 +79,8 @@ public class Map {
                     double x = (c * currentTileSize) - cameraX;
                     double y = (r * currentTileSize) - cameraY;
 
-                    // No need for an additional check here as the loop bounds already handle culling.
-                    // The previous check was:
-                    // if (x + currentTileSize > 0 && x < panelWidth && y + currentTileSize > 0 && y < panelHeight) {
                     java.awt.Image img = null;
-                    if(dangerMap != null && dangerMap.length > 1 && dangerMap[c][r]) {
-                        tileType = Utilities.Danger;
-                    }
                     switch (tileType) {
-                        case Utilities.Danger: //danger (testing)
-                            img = Utilities.DANGER_IMAGE;
-                            break;
                         case Utilities.WALL:
                             img = Utilities.WALL_IMAGE;
                             break;
@@ -97,10 +92,8 @@ public class Map {
                             break;
                     }
                     if (img != null) {
-                        // Draw the image at the calculated screen position
                         g.drawImage(img, (int) x, (int) y, (int) currentTileSize, (int) currentTileSize, null);
                     }
-                    // }
                 }
             }
         }

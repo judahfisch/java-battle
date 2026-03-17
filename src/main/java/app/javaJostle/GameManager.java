@@ -5,17 +5,15 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.text.DecimalFormat;
 import java.awt.image.BufferedImage;
 import java.io.File;
 
 public class GameManager {
     private ArrayList<String> robotOptions;
-    private ArrayList<String> mapOptions;   // Renamed from mapNames for consistency
+    private ArrayList<String> mapOptions;
 
     private JFrame frame; // Menu frame
-    // private JComboBox<String> robotComboBox; // Replaced by multiple
     private JComboBox<String> mapComboBox;
     private JButton startButton;
 
@@ -36,7 +34,7 @@ public class GameManager {
 
     private final int SCROLL_STEP = 32;
     private final int GAME_TIMER_DELAY_MS = 40;
-    private final double[] speedFactors = {0.25, 0.5, 1.0, 2.0, 4.0};
+    private final double[] speedFactors = {0.25, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0};
     private int currentSpeedIndex = 2;
     private static final DecimalFormat df = new DecimalFormat("0.##");
 
@@ -60,21 +58,11 @@ public class GameManager {
 
     private void loadRobotOptions() {
         robotOptions.clear();
-        File robotsClassDir = new File("src/main/resources/robots/app/javaJostle");
-        if (robotsClassDir.exists() && robotsClassDir.isDirectory()) {
-            File[] files = robotsClassDir.listFiles();
-            if (files != null) {
-                List<String> robotNames = new ArrayList<>();
-                for (File file : files) {
-                    if (file.isFile() && file.getName().endsWith(".class") && !file.getName().contains("$")) {
-                        String name = file.getName().substring(0, file.getName().length() - ".class".length());
-                        robotNames.add(name);
-                    }
-                }
-                Collections.sort(robotNames);
-                robotOptions.addAll(robotNames);
-            }
-        }
+        
+        // Preload all robot classes from the resources directory
+        Utilities.preloadRobotClasses();
+
+        robotOptions.addAll(Utilities.getLoadedRobotNames());
     }
 
     private void loadMapOptions() {
@@ -110,23 +98,12 @@ public class GameManager {
         robotSelectionPanel.setBackground(Color.BLACK); // Black background for the selection area
         robotSelectionPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // Initialize with 2 robot slots
-        currentRobotSlots = 0; // Reset count
+        currentRobotSlots = 0;
         robotSlotComboBoxesList.clear();
         robotStatDisplayPanelsList.clear();
-        addRobotSlotRow(); // Adds the first row (which can contain up to 2 slots)
-        
-        // If you want exactly 2 slots to start, and addRobotSlotRow adds 2:
-        // addRobotSlot(); // Slot 1
-        // addRobotSlot(); // Slot 2
-        // For a row-based approach (2 per row):
-        // We'll call a method that adds a full row or fills the current one.
-        // Let's refine addRobotSlot to handle this.
-        // For simplicity, let's ensure the first two slots are added.
-        // The addRobotSlotRow will handle creating rows.
-        // The following will ensure at least two slots are attempted to be added.
-        if(currentRobotSlots < 2) addRobotSlotToPanel();
-        if(currentRobotSlots < 2) addRobotSlotToPanel();
+        addRobotSlotRow();
+        if (currentRobotSlots < 2) addRobotSlotToPanel();
+        if (currentRobotSlots < 2) addRobotSlotToPanel();
 
 
         JScrollPane scrollPane = new JScrollPane(robotSelectionPanel);
@@ -303,8 +280,6 @@ public class GameManager {
             JOptionPane.showMessageDialog(frame, "Please select at least one robot to start the game.", "No Robots Selected", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        // You might want to enforce a minimum number of robots, e.g., at least 2 for a game.
-        // For now, any number > 0 will proceed.
 
         String selectedMapName = (String) mapComboBox.getSelectedItem();
 
@@ -317,11 +292,8 @@ public class GameManager {
             gameOverFrame = null;
         }
         
-        // The rest of your startGame logic (creating Game instance, gameFrame, etc.)
-        // ...
-        int maxGameDurationSeconds = 300; // Example
+        int maxGameDurationSeconds = 300;
         gamePanel = new Game(selectedRobotList, selectedMapName, maxGameDurationSeconds * 1000 / GAME_TIMER_DELAY_MS);
-        // ... (rest of gameFrame setup as you had before) ...
 
         gamePanel.setPreferredSize(new Dimension(Utilities.SCREEN_WIDTH, Utilities.SCREEN_HEIGHT));
         gamePanel.setBackground(Color.BLACK);
@@ -484,9 +456,6 @@ public class GameManager {
                 singleRobotPanel.setBorder(BorderFactory.createLineBorder(Color.GREEN, 2));
             } else if (robot.hasAttackBoost()) {
                 singleRobotPanel.setBorder(BorderFactory.createLineBorder(Color.BLUE, 2));
-            } else {
-                // Optional: set a default border or no border if none of the conditions are met
-                // singleRobotPanel.setBorder(null); // Or a default border
             }
 
             BufferedImage img = robot.getImage();
@@ -509,7 +478,7 @@ public class GameManager {
 
     private void updateGameDisplayAndRepaint() {
         if (gamePanel != null && gameFrame != null && gameFrame.isVisible()) {
-            gamePanel.setDisplayParameters(gamePanel.getWidth(), gamePanel.getHeight(), (int) Math.round(cameraX), (int) Math.round(cameraY), this.zoomFactor);
+            gamePanel.setDisplayParameters(gamePanel.getWidth(), gamePanel.getHeight(), (int) Math.round(cameraX), (int) Math.round(cameraY), zoomFactor);
             gamePanel.repaint();
             if (timerLabel != null) {
                 // gamePanel.getDuration() is the number of steps taken
@@ -552,12 +521,13 @@ public class GameManager {
         }
         
         double stepsToExecute = 0;
-        double epsilon = 0.001;
-        if (Math.abs(gameSpeedFactor - speedFactors[0]) < epsilon) { if (gameLoopCounter % 4 == 0) stepsToExecute = 1; }
-        else if (Math.abs(gameSpeedFactor - speedFactors[1]) < epsilon) { if (gameLoopCounter % 2 == 0) stepsToExecute = 1; }
-        else if (Math.abs(gameSpeedFactor - speedFactors[2]) < epsilon) { stepsToExecute = 1; }
-        else if (Math.abs(gameSpeedFactor - speedFactors[3]) < epsilon) { stepsToExecute = 2; }
-        else if (Math.abs(gameSpeedFactor - speedFactors[4]) < epsilon) { stepsToExecute = 4; }
+        if (gameSpeedFactor < 1.0) {
+            if (gameLoopCounter % (int) Math.round(1.0 / gameSpeedFactor) == 0) {
+                stepsToExecute = 1;
+            }
+        }else {
+            stepsToExecute = gameSpeedFactor;
+        }
 
         for (int i = 0; i < stepsToExecute; i++) {
             if (gamePanel.isGameOver()) break;
@@ -686,8 +656,7 @@ public class GameManager {
             loadMapOptions();
             initMenu(); 
         });
-        // ... rest of showGameOverScreen
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10)); 
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 10));
         buttonPanel.setOpaque(false);
         buttonPanel.add(continueButton);
         gameOverFrame.add(buttonPanel, BorderLayout.SOUTH);
