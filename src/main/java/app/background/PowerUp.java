@@ -7,6 +7,7 @@ public class PowerUp {
     private double x;
     private double y;
     private String type;
+
     public PowerUp(double x, double y) {
         double r = Math.random();
         if (r < 0.33) {

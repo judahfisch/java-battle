@@ -11,7 +11,8 @@ public class MyRobot extends Robot {
     }
 
     @Override
-    public void think(List<RobotReadOnly> robots, List<ProjectileReadOnly> projectiles, MapReadOnly map, List<PowerUpReadOnly> powerups) {
-        // Put your logic here
+    public void think(List<Robot> robots, List<Projectile> projectiles, Map map, List<PowerUp> powerups) {
+        // Put your think logic here
+        
     }
 }

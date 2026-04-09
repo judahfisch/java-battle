@@ -4,7 +4,6 @@ import javax.swing.JPanel;
 import java.awt.Graphics;
 import java.awt.Dimension;
 import java.util.ArrayList;
-import java.util.AbstractList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,11 +16,11 @@ public class Game extends JPanel {
     private ArrayList<Robot> robots;
     private ArrayList<Projectile> projectiles = new ArrayList<>();
     private ArrayList<PowerUp> powerUps;
-    private List<RobotReadOnly> readOnlyRobotsView;
-    private List<ProjectileReadOnly> readOnlyProjectilesView;
-    private List<PowerUpReadOnly> readOnlyPowerUpsView;
     private Map map;
-    private MapReadOnly mapReadOnly;
+    private List<Robot> readOnlyRobots;
+    private List<Projectile> readOnlyProjectiles;
+    private List<PowerUp> readOnlyPowerUps;
+    private Map readOnlyMap;
     private int duration = 0;
     private Random randomGenerator;
     private int currentWidth, currentHeight, currentCameraX, currentCameraY;
@@ -32,14 +31,13 @@ public class Game extends JPanel {
     public Game(ArrayList<String> robotFileNames, String mapName, int maxDuration) {
         robots = new ArrayList<>();
         powerUps = new ArrayList<>();
-        readOnlyRobotsView = createRobotReadOnlyView();
-        readOnlyProjectilesView = createProjectileReadOnlyView();
-        readOnlyPowerUpsView = createPowerUpReadOnlyView();
+        map = new Map(mapName);
+        readOnlyRobots = createRobotReadOnlyView();
+        readOnlyProjectiles = createProjectileReadOnlyView();
+        readOnlyPowerUps = createPowerUpReadOnlyView();
+        readOnlyMap = createMapReadOnlyView();
         this.maxDuration = maxDuration;
         randomGenerator = new Random();
-
-        map = new Map(mapName);
-        mapReadOnly = new ReadOnlyMap(map);
 
         try {
             for (String className : robotFileNames) {
@@ -49,8 +47,9 @@ public class Game extends JPanel {
                     continue;
                 }
 
-                int numCols = (map.getTiles() != null && map.getTiles().length > 0)
-                        ? map.getTiles()[0].length
+                int[][] tiles = map.getTilesInternal();
+                int numCols = (tiles != null && tiles.length > 0)
+                    ? tiles[0].length
                         : 0;
                 if (numCols == 0) {
                     System.err.println("Map has no columns. Cannot place robot " + className);
@@ -87,12 +86,17 @@ public class Game extends JPanel {
     }
 
     private int smartSpawn() {
-        if (map == null || map.getTiles() == null || map.getTiles().length == 0 || map.getTiles()[0].length == 0) {
+        if (map == null) {
             System.err.println("SmartSpawn: Map is not properly initialized.");
             return -1;
         }
-        int numRows = map.getTiles().length;
-        int numCols = map.getTiles()[0].length;
+        int[][] tiles = map.getTilesInternal();
+        if (tiles == null || tiles.length == 0 || tiles[0].length == 0) {
+            System.err.println("SmartSpawn: Map is not properly initialized.");
+            return -1;
+        }
+        int numRows = tiles.length;
+        int numCols = tiles[0].length;
 
         List<Point> grassLocations = new ArrayList<>();
         Set<Point> visitedGrassLocations = new HashSet<>();
@@ -104,7 +108,7 @@ public class Game extends JPanel {
             int c = randomGenerator.nextInt(numCols);
             Point candidatePoint = new Point(c, r);
 
-            if (map.getTiles()[r][c] == Utilities.GRASS && !visitedGrassLocations.contains(candidatePoint)) {
+            if (tiles[r][c] == Utilities.GRASS && !visitedGrassLocations.contains(candidatePoint)) {
                 grassLocations.add(candidatePoint);
                 visitedGrassLocations.add(candidatePoint);
             }
@@ -115,7 +119,7 @@ public class Game extends JPanel {
             System.err.println("SmartSpawn: Could not find any grass tiles after " + maxSamplingAttempts + " random attempts. Scanning map...");
             for (int r = 0; r < numRows; r++) {
                 for (int c = 0; c < numCols; c++) {
-                    if (map.getTiles()[r][c] == Utilities.GRASS) {
+                    if (map.getTilesInternal()[r][c] == Utilities.GRASS) {
                         System.out.println("SmartSpawn: Found fallback grass tile at (" + c + "," + r + ")");
                         return r * numCols + c;
                     }
@@ -228,49 +232,23 @@ public class Game extends JPanel {
 
     public List<Robot> getRobotsInCell(int cellX, int cellY) {
         List<Robot> list = robotGrid.get((cellX << 16) | cellY);
-        return list != null ? list : Collections.emptyList();
+        return list != null ? Collections.unmodifiableList(list) : Collections.emptyList();
     }
 
-    private List<RobotReadOnly> createRobotReadOnlyView() {
-        return new AbstractList<RobotReadOnly>() {
-            @Override
-            public RobotReadOnly get(int index) {
-                return new ReadOnlyRobot(robots.get(index));
-            }
-
-            @Override
-            public int size() {
-                return robots.size();
-            }
-        };
+    private List<Robot> createRobotReadOnlyView() {
+        return Collections.unmodifiableList(robots);
     }
 
-    private List<ProjectileReadOnly> createProjectileReadOnlyView() {
-        return new AbstractList<ProjectileReadOnly>() {
-            @Override
-            public ProjectileReadOnly get(int index) {
-                return new ReadOnlyProjectile(projectiles.get(index));
-            }
-
-            @Override
-            public int size() {
-                return projectiles.size();
-            }
-        };
+    private List<Projectile> createProjectileReadOnlyView() {
+        return Collections.unmodifiableList(projectiles);
     }
 
-    private List<PowerUpReadOnly> createPowerUpReadOnlyView() {
-        return new AbstractList<PowerUpReadOnly>() {
-            @Override
-            public PowerUpReadOnly get(int index) {
-                return new ReadOnlyPowerUp(powerUps.get(index));
-            }
+    private List<PowerUp> createPowerUpReadOnlyView() {
+        return Collections.unmodifiableList(powerUps);
+    }
 
-            @Override
-            public int size() {
-                return powerUps.size();
-            }
-        };
+    private Map createMapReadOnlyView() {
+        return map;
     }
 
     public void step() {
@@ -302,7 +280,7 @@ public class Game extends JPanel {
 
                 Thread thinkThread = new Thread(() -> {
                     try {
-                        robot.think(readOnlyRobotsView, readOnlyProjectilesView, mapReadOnly, readOnlyPowerUpsView);
+                        robot.think(readOnlyRobots, readOnlyProjectiles, readOnlyMap, readOnlyPowerUps);
                         robot.step(this);
                     } catch (Exception e) {
                         System.err.println("Exception in Robot " + robot.getName() + " think method: " + e.getMessage());
@@ -375,8 +353,9 @@ public class Game extends JPanel {
         if (Math.random() < Utilities.POWER_UP_SPAWN_CHANCE) {
             int encodedSpawnLocation = smartSpawn();
             if (encodedSpawnLocation != -1) {
-                int numCols = (map.getTiles() != null && map.getTiles().length > 0)
-                        ? map.getTiles()[0].length
+                int[][] tiles = map.getTilesInternal();
+                int numCols = (tiles != null && tiles.length > 0)
+                    ? tiles[0].length
                         : 0;
                 if (numCols > 0) {
                     int spawnRow = encodedSpawnLocation / numCols;
@@ -405,8 +384,8 @@ public class Game extends JPanel {
         return maxDuration;
     }
 
-    public ArrayList<Robot> getRobots() {
-        return robots;
+    public List<Robot> getRobots() {
+        return Collections.unmodifiableList(robots);
     }
 
     public void addProjectile(Projectile projectile) {
@@ -417,12 +396,12 @@ public class Game extends JPanel {
         return map;
     }
 
-    public ArrayList<Projectile> getProjectiles() {
-        return projectiles;
+    public List<Projectile> getProjectiles() {
+        return Collections.unmodifiableList(projectiles);
     }
 
-    public ArrayList<PowerUp> getPowerUps() {
-        return powerUps;
+    public List<PowerUp> getPowerUps() {
+        return Collections.unmodifiableList(powerUps);
     }
 
     public boolean isGameOver() {

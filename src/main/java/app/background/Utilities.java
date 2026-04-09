@@ -8,43 +8,123 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.imageio.ImageIO;
 
 class RestrictedRobotClassLoader extends URLClassLoader {
+    private static final Set<String> ALLOWED_PACKAGE_PREFIXES = Set.of(
+        "app.background.",
+        "app.robots.",
+        "java.lang.",
+        "java.util."
+    );
+
+    private static final Set<String> ALLOWED_EXACT_CLASSES = Set.of(
+        "java.lang.invoke.StringConcatFactory",
+        "java.lang.invoke.MethodHandles",
+        "java.lang.invoke.MethodHandles$Lookup",
+        "java.lang.invoke.MethodType",
+        "java.lang.invoke.CallSite"
+    );
+
+    private static final Set<String> BLOCKED_EXACT_CLASSES = Set.of(
+        "java.lang.System",
+        "java.lang.Runtime",
+        "java.lang.Process",
+        "java.lang.ProcessBuilder",
+        "java.lang.Thread",
+        "java.lang.Runnable",
+        "java.lang.ThreadGroup",
+        "java.lang.ThreadLocal",
+        "java.lang.ClassLoader",
+        "java.util.Timer",
+        "java.util.TimerTask",
+        "java.util.ServiceLoader"
+    );
+
+    private static final Set<String> BLOCKED_PACKAGE_MATCHERS = Set.of(
+        "java.lang.reflect.",
+        "java.lang.invoke.",
+        "java.lang.management.",
+        "java.util.concurrent.",
+        "java.util.logging.",
+        "java.util.prefs."
+    );
+
     public RestrictedRobotClassLoader(URL[] urls, ClassLoader parent) {
         super(urls, parent);
     }
 
     @Override
     public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        // Block reflection and introspection APIs for robot code.
-        if (name.startsWith("java.lang.reflect.") ||
-            name.startsWith("java.lang.invoke.") ||
-            name.startsWith("jdk.internal.reflect.") ||
-            name.startsWith("sun.reflect.") ||
-            name.equals("sun.misc.Unsafe") ||
-            name.equals("jdk.internal.misc.Unsafe")) {
-            throw new ClassNotFoundException("Access denied: Reflection is not allowed. Class: " + name);
+        if (!isAllowedByPackage(name)) {
+            throw new ClassNotFoundException("Access denied (not in allowlist): " + name);
         }
 
-        // Block thread creation APIs for robot code.
-        if (name.equals("java.lang.Thread") ||
-            name.startsWith("java.lang.Thread$") ||
-            name.equals("java.lang.Runnable") ||
-            name.startsWith("java.lang.ThreadGroup") ||
-            name.startsWith("java.lang.ThreadLocal") ||
-            name.startsWith("java.util.concurrent.") ||
-            name.equals("java.util.Timer") ||
-            name.equals("java.util.TimerTask")) {
-            throw new ClassNotFoundException("Access denied: Threads are not allowed. Class: " + name);
+        if (isBlocked(name)) {
+            throw new ClassNotFoundException("Access denied by policy: " + name);
         }
 
-        // Allow everything else through normal parent delegation.
-        return super.loadClass(name, resolve);
+        synchronized (getClassLoadingLock(name)) {
+            Class<?> loaded = findLoadedClass(name);
+
+            if (loaded == null) {
+                if (name.startsWith("app.robots.")) {
+                    try {
+                        loaded = findClass(name);
+                    } catch (ClassNotFoundException e) {
+                        loaded = super.loadClass(name, false);
+                    }
+                } else {
+                    loaded = super.loadClass(name, false);
+                }
+            }
+
+            if (resolve) {
+                resolveClass(loaded);
+            }
+
+            return loaded;
+        }
+    }
+
+    private static boolean isBlocked(String name) {
+        if (ALLOWED_EXACT_CLASSES.contains(name)) {
+            return false;
+        }
+
+        for (String blockedClass : BLOCKED_EXACT_CLASSES) {
+            if (name.equals(blockedClass)) {
+                return true;
+            }
+        }
+
+        for (String blockedPackage : BLOCKED_PACKAGE_MATCHERS) {
+            if (name.contains(blockedPackage)) {
+                if (ALLOWED_EXACT_CLASSES.contains(name)) {
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean isAllowedByPackage(String name) {
+        if (ALLOWED_EXACT_CLASSES.contains(name)) {
+            return true;
+        }
+
+        for (String prefix : ALLOWED_PACKAGE_PREFIXES) {
+            if (name.startsWith(prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
@@ -73,12 +153,12 @@ public class Utilities {
     public static final int POWER_UP_SIZE = 20; // Default power-up size
     public static final int ROBOT_SIZE = 28; // Default robot size
 
-    public static ArrayList<Integer> keysPressed = new ArrayList<>();
+    static ArrayList<Integer> keysPressed = new ArrayList<>();
     
     // Each robot class is loaded by its own isolated RestrictedRobotClassLoader
-    private static Map<String, Class<?>> loadedRobotClasses = new HashMap<>();
-    private static Map<String, RestrictedRobotClassLoader> robotLoaders = new HashMap<>();
-    private static final Map<String, BufferedImage> imageCache = new ConcurrentHashMap<>();
+    private static java.util.Map<String, Class<?>> loadedRobotClasses = new HashMap<>();
+    private static java.util.Map<String, RestrictedRobotClassLoader> robotLoaders = new HashMap<>();
+    private static final java.util.Map<String, BufferedImage> imageCache = new ConcurrentHashMap<>();
     private static final String ROBOT_PACKAGE = "app.robots";
 
     public static BufferedImage loadImage(String imgName) {
@@ -156,13 +236,13 @@ public class Utilities {
         return src.getSubimage(minX, minY, (maxX - minX + 1), (maxY - minY + 1));
     }
 
-    public static void handleKeyPressed(int keyCode) {
+    static void handleKeyPressed(int keyCode) {
         if (!keysPressed.contains(keyCode)) {
             keysPressed.add(keyCode);
         }
     }
 
-    public static void handleKeyReleased(int keyCode) {
+    static void handleKeyReleased(int keyCode) {
         for (int i = 0; i < keysPressed.size(); i++) {
             if (keysPressed.get(i) == keyCode) {
                 keysPressed.remove(i);
@@ -175,11 +255,11 @@ public class Utilities {
     private static boolean[] testKeyStates = new boolean[256];
 
     // Test helper methods
-    public static void resetKeyStates() {
+    static void resetKeyStates() {
         Arrays.fill(testKeyStates, false);
     }
 
-    public static void setKeyPressed(int keyCode, boolean isPressed) {
+    static void setKeyPressed(int keyCode, boolean isPressed) {
         if (keyCode < testKeyStates.length) {
             testKeyStates[keyCode] = isPressed;
         }
@@ -187,11 +267,11 @@ public class Utilities {
 
     private static boolean inTestMode = false;
 
-    public static void setTestMode(boolean enabled) {
+    static void setTestMode(boolean enabled) {
         inTestMode = enabled;
     }
 
-    public static boolean isKeyPressed(int keyCode) {
+    static boolean isKeyPressed(int keyCode) {
         if (inTestMode) {
             return keyCode < testKeyStates.length && testKeyStates[keyCode];
         } else {
@@ -204,7 +284,7 @@ public class Utilities {
      * Preload all robot classes from the robots resource directory.
      * Each robot is isolated in its own RestrictedRobotClassLoader.
      */
-    public static void preloadRobotClasses() {
+    static void preloadRobotClasses() {
         File robotsResourceDir = new File("src/main/resources/robots");
         loadedRobotClasses.clear();
         robotLoaders.clear();
@@ -228,7 +308,7 @@ public class Utilities {
     /**
      * Recursively load classes from a directory, each in its own isolated RestrictedRobotClassLoader.
      */
-    private static void loadClassesFromDirectory(File dir, File rootDir) {
+    static void loadClassesFromDirectory(File dir, File rootDir) {
         if (!dir.isDirectory()) {
             return;
         }
@@ -267,6 +347,14 @@ public class Utilities {
                     // Load the robot class using its isolated loader
                     Class<?> loadedClass = isolatedLoader.loadClass(fullClassName);
 
+                    // Security check: reject classes that escaped to parent/system loader.
+                    if (loadedClass.getClassLoader() != isolatedLoader) {
+                        throw new SecurityException(
+                            "Robot class was not defined by its restricted loader: " + fullClassName +
+                            " (actual loader=" + loadedClass.getClassLoader() + ")"
+                        );
+                    }
+
                     if (!Robot.class.isAssignableFrom(loadedClass)) {
                         continue;
                     }
@@ -281,25 +369,30 @@ public class Utilities {
         }
     }
 
-    public static ArrayList<String> getLoadedRobotNames() {
+    static ArrayList<String> getLoadedRobotNames() {
         ArrayList<String> names = new ArrayList<>(loadedRobotClasses.keySet());
-        Collections.sort(names);
         return names;
     }
     
     /**
      * Get a preloaded robot class by simple name.
      */
-    public static Class<?> getRobotClass(String className) {
+    static Class<?> getRobotClass(String className) {
         return loadedRobotClasses.get(className);
     }
 
-    public static Robot createRobot(int x, int y, String className) {
+    static Robot createRobot(int x, int y, String className) {
         // Get the preloaded class from cache
         Class<?> loadedClass = getRobotClass(className);
         
         if (loadedClass == null) {
             System.err.println("Robot class not preloaded: " + className);
+            return null;
+        }
+
+        if (!(loadedClass.getClassLoader() instanceof RestrictedRobotClassLoader)) {
+            System.err.println("Refusing to instantiate robot not loaded by restricted loader: " + className +
+                    " (actual loader=" + loadedClass.getClassLoader() + ")");
             return null;
         }
         

@@ -12,7 +12,7 @@ public class Rando extends Robot {
     }
 
     @Override
-    public void think(List<RobotReadOnly> robots, List<ProjectileReadOnly> projectiles, MapReadOnly map, List<PowerUpReadOnly> powerups) {
+    public void think(List<Robot> robots, List<Projectile> projectiles, Map map, List<PowerUp> powerups) {
         if (Math.random() < 0.1) {
             double r = Math.random();
             if (r < 0.25) {
@@ -32,7 +32,7 @@ public class Rando extends Robot {
         xMovement = curXMovement;
         yMovement = curYMovement;
         if (canAttack()) {
-            for (RobotReadOnly robot : robots) {
+            for (Robot robot : robots) {
                 if (robot.getId() != getId() && robot.isAlive()) {
                     shootAtLocation(robot.getX() + Utilities.ROBOT_SIZE / 2, robot.getY() + Utilities.ROBOT_SIZE / 2);
                     break;

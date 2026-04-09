@@ -11,7 +11,7 @@ public class Rock extends Robot {
         // Total = 10
     }
 
-    public void think(List<RobotReadOnly> robots, List<ProjectileReadOnly> projectiles, MapReadOnly map, List<PowerUpReadOnly> powerups) {
+    public void think(List<Robot> robots, List<Projectile> projectiles, Map map, List<PowerUp> powerups) {
         //rock robot is not smart and doesn't think very well. 
                 
     }

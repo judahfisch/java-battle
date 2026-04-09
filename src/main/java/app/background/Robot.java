@@ -1,4 +1,5 @@
 package app.background;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -8,18 +9,16 @@ import java.awt.image.BufferedImage;
 public abstract class Robot {
     private static final AtomicInteger NEXT_ID = new AtomicInteger(1);
 
-    // attribute points
     private int healthPoints;
     private int speedPoints;
     private int attackSpeedPoints;
     private int projectileStrengthPoints;
 
-    // attribute calculated values
     private int health;
     private int maxHealth;
     private int speed;
     private int attackMaxCooldown;
-    protected int attackCurCooldown;
+    private int attackCurCooldown;
     private int projectileSpeed;
     private int projectileDamage;
     private String name;
@@ -37,7 +36,6 @@ public abstract class Robot {
     protected int yTarget;
     protected boolean shoot;
 
-    // Power-up effect fields
     private static final int BOOST_DURATION_TICKS = 150;
     private int speedBoostDuration = 0;
     private int attackBoostDuration = 0;
@@ -46,31 +44,29 @@ public abstract class Robot {
     private int originalProjectileSpeed;
     private int originalProjectileDamage;
 
-
     public Robot(int x, int y, int healthPoints, int speedPoints, int attackSpeedPoints, int projectileStrengthPoints, String robotName, String imageName, String projectileImageName) {
-        // all values need to be from 1-5, summing to 10 in total
         int sum = healthPoints + speedPoints + attackSpeedPoints + projectileStrengthPoints;
 
         if (healthPoints < 1) {
-            throw new IllegalArgumentException(robotName + "\'s health points must be at least 1");
+            throw new IllegalArgumentException(robotName + "'s health points must be at least 1");
         } else if (speedPoints < 1) {
-            throw new IllegalArgumentException(robotName + "\'s speed points must be at least 1");
+            throw new IllegalArgumentException(robotName + "'s speed points must be at least 1");
         } else if (attackSpeedPoints < 1) {
-            throw new IllegalArgumentException(robotName + "\'s attack speed points must be at least 1");
+            throw new IllegalArgumentException(robotName + "'s attack speed points must be at least 1");
         } else if (projectileStrengthPoints < 1) {
-            throw new IllegalArgumentException(robotName + "\'s projectile strength points must be at least 1");
+            throw new IllegalArgumentException(robotName + "'s projectile strength points must be at least 1");
         } else if (sum != 10) {
-            throw new IllegalArgumentException(robotName + "\'s sum of all points must equal 10");
+            throw new IllegalArgumentException(robotName + "'s sum of all points must equal 10");
         } else if (healthPoints > 5) {
-            throw new IllegalArgumentException(robotName + "\'s health points must not exceed 5");
+            throw new IllegalArgumentException(robotName + "'s health points must not exceed 5");
         } else if (speedPoints > 5) {
-            throw new IllegalArgumentException(robotName + "\'s speed points must not exceed 5");
+            throw new IllegalArgumentException(robotName + "'s speed points must not exceed 5");
         } else if (attackSpeedPoints > 5) {
-            throw new IllegalArgumentException(robotName + "\'s attack speed points must not exceed 5");
+            throw new IllegalArgumentException(robotName + "'s attack speed points must not exceed 5");
         } else if (projectileStrengthPoints > 5) {
-            throw new IllegalArgumentException(robotName + "\'s projectile strength points must not exceed 5");
+            throw new IllegalArgumentException(robotName + "'s projectile strength points must not exceed 5");
         }
-        
+
         this.image = Utilities.loadImage(imageName);
         if (this.image == null) {
             this.image = Utilities.ROBOT_ERROR;
@@ -90,14 +86,13 @@ public abstract class Robot {
         this.attackSpeedPoints = attackSpeedPoints;
         this.projectileStrengthPoints = projectileStrengthPoints;
 
-        // give stats based on points
-        this.health = 30 + healthPoints * 20; // 50 - 130
+        this.health = 30 + healthPoints * 20;
         this.maxHealth = this.health;
-        this.speed = 2 + speedPoints; // 3 - 7 (int)
-        this.attackMaxCooldown = 22 - attackSpeedPoints * 2; // 20 - 12
+        this.speed = 2 + speedPoints;
+        this.attackMaxCooldown = 22 - attackSpeedPoints * 2;
         this.attackCurCooldown = attackMaxCooldown;
-        this.projectileSpeed = 5 + projectileStrengthPoints; // 6 - 10
-        this.projectileDamage = 10 + projectileStrengthPoints * 3; // 13 - 25
+        this.projectileSpeed = 5 + projectileStrengthPoints;
+        this.projectileDamage = 10 + projectileStrengthPoints * 3;
 
         this.originalSpeed = this.speed;
         this.originalProjectileSpeed = this.projectileSpeed;
@@ -114,12 +109,17 @@ public abstract class Robot {
         shoot = true;
     }
 
-    public abstract void think(final List<RobotReadOnly> robots, final List<ProjectileReadOnly> projectiles, final MapReadOnly map, final List<PowerUpReadOnly> powerups);
+    // Trusted logging surface for robot implementations without exposing System APIs.
+    protected final void log(String message) {
+        System.out.println(message);
+    }
+
+    public abstract void think(final List<Robot> robots, final List<Projectile> projectiles, final Map map, final List<PowerUp> powerups);
 
     private boolean isPointOkay(int pX, int pY, Map gameMap, ArrayList<Robot> allRobots) {
-        if (gameMap == null || gameMap.getTiles() == null)
+        if (gameMap == null || gameMap.getTilesInternal() == null)
             return false;
-        int[][] mapTiles = gameMap.getTiles();
+        int[][] mapTiles = gameMap.getTilesInternal();
         int mapRows = mapTiles.length;
         if (mapRows == 0)
             return false;
@@ -127,12 +127,10 @@ public abstract class Robot {
         if (mapCols == 0)
             return false;
 
-        // 1. Map Boundary Check for the point
         if (pX < 0 || pY < 0 || pX >= mapCols * Utilities.TILE_SIZE || pY >= mapRows * Utilities.TILE_SIZE) {
             return false;
         }
 
-        // 2. Wall Tile Check for the point
         int tileCol = (int) (pX / Utilities.TILE_SIZE);
         int tileRow = (int) (pY / Utilities.TILE_SIZE);
         if (tileRow < 0 || tileRow >= mapRows || tileCol < 0 || tileCol >= mapCols) {
@@ -142,7 +140,6 @@ public abstract class Robot {
             return false;
         }
 
-        // 3. Other Robot Check for the point
         if (allRobots != null) {
             for (Robot otherRobot : allRobots) {
                 if (otherRobot == this || !otherRobot.isAlive()) {
@@ -158,18 +155,15 @@ public abstract class Robot {
     }
 
     private boolean canMoveTo(int targetX, int targetY, Game game) {
-        // Define the 4 corners at this potential new position
-        // Top-left, Top-right, Bottom-left, Bottom-right
         int c1x = targetX;
         int c1y = targetY;
-        int c2x = targetX + Utilities.ROBOT_SIZE - 1; // Use -1 for inclusive edge if ROBOT_SIZE is a dimension
+        int c2x = targetX + Utilities.ROBOT_SIZE - 1;
         int c2y = targetY;
         int c3x = targetX;
         int c3y = targetY + Utilities.ROBOT_SIZE - 1;
         int c4x = targetX + Utilities.ROBOT_SIZE - 1;
         int c4y = targetY + Utilities.ROBOT_SIZE - 1;
 
-        // Use spatial grid: only check robots in cells this bounding box touches
         int minCX = targetX / Utilities.TILE_SIZE;
         int maxCX = (targetX + Utilities.ROBOT_SIZE - 1) / Utilities.TILE_SIZE;
         int minCY = targetY / Utilities.TILE_SIZE;
@@ -190,9 +184,9 @@ public abstract class Robot {
     }
 
     private boolean isTileMud(int currentX, int currentY, Map gameMap) {
-        if (gameMap == null || gameMap.getTiles() == null)
+        if (gameMap == null || gameMap.getTilesInternal() == null)
             return false;
-        int[][] mapTiles = gameMap.getTiles();
+        int[][] mapTiles = gameMap.getTilesInternal();
         int mapRows = mapTiles.length;
         if (mapRows == 0)
             return false;
@@ -217,7 +211,8 @@ public abstract class Robot {
         }
         return false;
     }
-    public final void applyPowerUpEffect(String type) {
+
+    final void applyPowerUpEffect(String type) {
         System.out.println(this.name + " picked up " + type + " power-up!");
         switch (type) {
             case "health":
@@ -225,15 +220,15 @@ public abstract class Robot {
                 System.out.println(this.name + " new health: " + this.health);
                 break;
             case "speed":
-                if (speedBoostDuration == 0) { // Only apply if not already boosted
-                    this.originalSpeed = this.speed; // Store current speed if it was somehow changed by other means
+                if (speedBoostDuration == 0) {
+                    this.originalSpeed = this.speed;
                 }
-                this.speed = this.originalSpeed * 2; // Apply boost based on original
+                this.speed = this.originalSpeed * 2;
                 this.speedBoostDuration = BOOST_DURATION_TICKS;
                 System.out.println(this.name + " new speed: " + this.speed + " for " + BOOST_DURATION_TICKS + " ticks.");
                 break;
             case "attack":
-                if (attackBoostDuration == 0) { // Only apply if not already boosted
+                if (attackBoostDuration == 0) {
                     this.originalProjectileSpeed = this.projectileSpeed;
                     this.originalProjectileDamage = this.projectileDamage;
                 }
@@ -252,29 +247,29 @@ public abstract class Robot {
         if (speedBoostDuration > 0) {
             speedBoostDuration--;
             if (speedBoostDuration == 0) {
-                this.speed = this.originalSpeed; // Revert to original speed
+                this.speed = this.originalSpeed;
                 System.out.println(this.name + " speed boost wore off. Speed reverted to " + this.speed);
             }
         }
         if (attackBoostDuration > 0) {
             attackBoostDuration--;
             if (attackBoostDuration == 0) {
-                this.projectileSpeed = this.originalProjectileSpeed; // Revert
-                this.projectileDamage = this.originalProjectileDamage; // Revert
+                this.projectileSpeed = this.originalProjectileSpeed;
+                this.projectileDamage = this.originalProjectileDamage;
                 System.out.println(this.name + " attack boost wore off. Projectile stats reverted.");
             }
         }
     }
-    public final void step(Game game) {// DONT CHANGE
+
+    final void step(Game game) {
         if(!isAlive()) {
-            return; // If the robot is dead, do nothing
+            return;
         }
         updatePowerUpEffects();
 
         if(Math.abs(xMovement) + Math.abs(yMovement) > 1) {
             throw new IllegalArgumentException("You can only move in one direction at a time, use xMovement and yMovement to set the direction");
         }
-        // shoot
         if (shoot && canAttack()) {
             Projectile p = new Projectile(x + Utilities.ROBOT_SIZE / 2 - Utilities.PROJECTILE_SIZE / 2, y + Utilities.ROBOT_SIZE / 2 - Utilities.PROJECTILE_SIZE / 2, xTarget, yTarget, projectileSpeed, projectileDamage, projectileImage,
                     this);
@@ -282,30 +277,26 @@ public abstract class Robot {
             attackCurCooldown = attackMaxCooldown;
         }
 
-        // --- MOVEMENT ---
-        int effectiveSpeed = this.speed; // this.speed is int
+        int effectiveSpeed = this.speed;
         if (isTileMud(this.x, this.y, game.getMap())) {
             effectiveSpeed /= 2.0;
         }
 
-        for (int i = 0; i < effectiveSpeed; i++) { // Iterate 'effectiveSpeedSteps' times
+        for (int i = 0; i < effectiveSpeed; i++) {
             int potentialNextX = x + xMovement;
-            int potentialNextY = y + yMovement; // Y remains unchanged for X movement
+            int potentialNextY = y + yMovement;
             if (canMoveTo(potentialNextX, potentialNextY, game)) {
                 x = potentialNextX;
-                y = potentialNextY; // Update Y only if X movement is successful
+                y = potentialNextY;
             } else {
-                break; // Collision detected, stop moving in X
+                break;
             }
         }
-
-        // --- END MOVEMENT ---
 
         if (attackCurCooldown > 0) {
             attackCurCooldown--;
         }
 
-        // clear out the things that should be changed in think
         xMovement = 0;
         yMovement = 0;
         xTarget = 0;
@@ -373,7 +364,7 @@ public abstract class Robot {
         return projectileStrengthPoints;
     }
 
-    public final void takeDamage(int amount) {
+    final void takeDamage(int amount) {
         this.health -= amount;
         if (this.health < 0) {
             this.health = 0;
@@ -384,7 +375,7 @@ public abstract class Robot {
         return this.health > 0;
     }
 
-    public final void setSuccessfulThink(boolean successful) {
+    final void setSuccessfulThink(boolean successful) {
         this.successfulThink = successful;
     }
 
@@ -392,7 +383,6 @@ public abstract class Robot {
         return successfulThink;
     }
 
-    // Getters for power-up effects
     public final boolean hasSpeedBoost() {
         return speedBoostDuration > 0;
     }

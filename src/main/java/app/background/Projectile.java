@@ -22,7 +22,6 @@ public class Projectile {
         this.projectileImage = projectileImage;
         this.owner = owner;
 
-        // Calculate the angle towards the target
         this.angle = Math.atan2(yTarget - this.y, xTarget - this.x);
     }
 
@@ -45,19 +44,19 @@ public class Projectile {
             double currentProjectileX = x + subStepDx;
             double currentProjectileY = y + subStepDy;
 
-            // 1. Wall Collision Check
             Map map = game.getMap();
-            if (map != null && map.getTiles() != null && map.getTiles().length > 0 && map.getTiles()[0].length > 0) {
+            int[][] tiles = map != null ? map.getTilesInternal() : null;
+            if (tiles != null && tiles.length > 0 && tiles[0].length > 0) {
                 double[] pX = {
-                    currentProjectileX, 
-                    currentProjectileX + Utilities.PROJECTILE_SIZE -1, 
-                    currentProjectileX, 
+                    currentProjectileX,
+                    currentProjectileX + Utilities.PROJECTILE_SIZE -1,
+                    currentProjectileX,
                     currentProjectileX + Utilities.PROJECTILE_SIZE -1
                 };
                 double[] pY = {
-                    currentProjectileY, 
-                    currentProjectileY, 
-                    currentProjectileY + Utilities.PROJECTILE_SIZE -1, 
+                    currentProjectileY,
+                    currentProjectileY,
+                    currentProjectileY + Utilities.PROJECTILE_SIZE -1,
                     currentProjectileY + Utilities.PROJECTILE_SIZE -1
                 };
 
@@ -65,16 +64,15 @@ public class Projectile {
                     int tileCol = (int) (pX[corner] / Utilities.TILE_SIZE);
                     int tileRow = (int) (pY[corner] / Utilities.TILE_SIZE);
 
-                    if (tileRow < 0 || tileRow >= map.getTiles().length ||
-                            tileCol < 0 || tileCol >= map.getTiles()[0].length ||
-                            map.getTiles()[tileRow][tileCol] == Utilities.WALL) {
+                        if (tileRow < 0 || tileRow >= tiles.length ||
+                            tileCol < 0 || tileCol >= tiles[0].length ||
+                            tiles[tileRow][tileCol] == Utilities.WALL) {
                         destroy();
                         return;
                     }
                 }
             }
 
-            // 2. Robot Collision Check using spatial grid
             int minCX = (int) currentProjectileX / Utilities.TILE_SIZE;
             int maxCX = (int) (currentProjectileX + Utilities.PROJECTILE_SIZE - 1) / Utilities.TILE_SIZE;
             int minCY = (int) currentProjectileY / Utilities.TILE_SIZE;
@@ -98,13 +96,12 @@ public class Projectile {
                 }
             }
 
-            // If no collision in this sub-step, update position
             x = currentProjectileX;
             y = currentProjectileY;
         }
     }
 
-    public void destroy() {
+    void destroy() {
         this.alive = false;
     }
 
@@ -116,7 +113,6 @@ public class Projectile {
         return y;
     }
 
-    // Getter for the calculated angle
     public double getAngle() {
         return angle;
     }

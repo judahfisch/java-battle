@@ -1,24 +1,18 @@
 package app.background;
 
-import java.awt.Graphics;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 
-public class Map implements MapReadOnly {
-    private int[][] tiles;
-    private int[][] robotTilesSnapshot;
+import java.awt.Graphics;
 
-    public Map(int[][] tiles) {
-        this.tiles = deepCopy(tiles);
-        rebuildRobotTilesSnapshot();
-    }
+public class Map {
+    private int[][] tiles;
 
     public Map(String name) {
-        // load the map from a file or resource
         ArrayList<int[]> rows = new ArrayList<>();
-        String path = "src/main/resources/maps/" + name + ".txt"; // Ensure this path is correct
+        String path = "src/main/resources/maps/" + name + ".txt";
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {
             String line;
             while ((line = br.readLine()) != null) {
@@ -36,7 +30,7 @@ public class Map implements MapReadOnly {
                             row[i] = Utilities.MUD;
                             break;
                         default:
-                            row[i] = -1; // unknown
+                            row[i] = -1;
                     }
                 }
                 rows.add(row);
@@ -44,9 +38,9 @@ public class Map implements MapReadOnly {
             tiles = rows.toArray(new int[rows.size()][]);
         } catch (IOException e) {
             e.printStackTrace();
-            tiles = new int[0][0]; // Initialize to empty if loading fails
+            tiles = new int[0][0];
         }
-        rebuildRobotTilesSnapshot();
+        this.tiles = deepCopy(tiles);
     }
 
     int[][] getTilesInternal() {
@@ -54,12 +48,7 @@ public class Map implements MapReadOnly {
     }
 
     public int[][] getTiles() {
-        // Return a fresh copy so callers cannot mutate shared map state.
-        return deepCopy(robotTilesSnapshot);
-    }
-
-    private void rebuildRobotTilesSnapshot() {
-        robotTilesSnapshot = deepCopy(tiles);
+        return deepCopy(tiles);
     }
 
     private static int[][] deepCopy(int[][] source) {
@@ -74,7 +63,7 @@ public class Map implements MapReadOnly {
         return copy;
     }
 
-    public void display(Graphics g, int panelWidth, int panelHeight, int cameraX, int cameraY, double zoomFactor) {
+    void display(Graphics g, int panelWidth, int panelHeight, int cameraX, int cameraY, double zoomFactor) {
         if (tiles == null || tiles.length == 0) {
             return;
         }
@@ -83,13 +72,11 @@ public class Map implements MapReadOnly {
 
         double currentTileSize = Utilities.TILE_SIZE * zoomFactor;
 
-        // Calculate the range of tiles to draw based on camera and zoom
         int startCol = (int) Math.floor(cameraX / currentTileSize);
         int endCol = (int) Math.ceil((cameraX + panelWidth) / currentTileSize);
         int startRow = (int) Math.floor(cameraY / currentTileSize);
         int endRow = (int) Math.ceil((cameraY + panelHeight) / currentTileSize);
 
-        // Clamp the ranges to the map boundaries
         startCol = Math.max(0, startCol);
         endCol = Math.min(cols, endCol);
         startRow = Math.max(0, startRow);
@@ -99,7 +86,6 @@ public class Map implements MapReadOnly {
             for (int c = startCol; c < endCol; c++) {
                 int tileType = tiles[r][c];
                 if (tileType != -1) {
-                    // Calculate screen position of the tile
                     double x = (c * currentTileSize) - cameraX;
                     double y = (r * currentTileSize) - cameraY;
 
