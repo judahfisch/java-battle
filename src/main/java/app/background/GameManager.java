@@ -46,7 +46,7 @@ public class GameManager {
     private int currentRobotSlots = 0;
 
 
-    public GameManager() {
+    GameManager() {
         loadRobotOptions(); // Populates this.robotOptions
         loadMapOptions();   // Populates this.mapOptions
         Utilities.loadImages();
@@ -509,7 +509,7 @@ public class GameManager {
         if (gameLoopCounter >= 10000) gameLoopCounter = 0;
     }
 
-    public JPanel createRobotDisplayPanel(Robot robot) {
+    JPanel createRobotDisplayPanel(Robot robot) {
         JPanel robotDisplayPanel = new JPanel();
         robotDisplayPanel.setLayout(new BoxLayout(robotDisplayPanel, BoxLayout.Y_AXIS));
         robotDisplayPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -637,7 +637,7 @@ public class GameManager {
         private static final int RECT_SPACING = 5; // Slightly increased spacing
         private static final int LABEL_WIDTH = 150; // Increased from 130
 
-        public StatDisplayPanel(String statName, int statValue) {
+        StatDisplayPanel(String statName, int statValue) {
             this.statName = statName;
             this.statValue = statValue;
             // Recalculate panelWidth based on new dimensions
@@ -676,7 +676,7 @@ public class GameManager {
         private Robot robot;
         private HealthBar healthBar;
 
-        public HealthBox(Robot robot) {
+        HealthBox(Robot robot) {
             this.robot = robot;
 
             setOpaque(false);
@@ -697,7 +697,7 @@ public class GameManager {
             add(healthBar);
         }
 
-        public void updateHealth() {
+        void updateHealth() {
             healthBar.currentHealth = robot.getHealth();
             healthBar.maxHealth = robot.getMaxHealth();
             // Add border based on robot status
@@ -717,7 +717,7 @@ public class GameManager {
         private int currentHealth;
         private int maxHealth;
 
-        public HealthBar(int currentHealth, int maxHealth) {
+        HealthBar(int currentHealth, int maxHealth) {
             this.currentHealth = currentHealth;
             this.maxHealth = maxHealth;
         }

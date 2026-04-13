@@ -32,10 +32,10 @@ public class Game extends JPanel {
         robots = new ArrayList<>();
         powerUps = new ArrayList<>();
         map = new Map(mapName);
-        readOnlyRobots = createRobotReadOnlyView();
-        readOnlyProjectiles = createProjectileReadOnlyView();
-        readOnlyPowerUps = createPowerUpReadOnlyView();
-        readOnlyMap = createMapReadOnlyView();
+        readOnlyRobots = Collections.unmodifiableList(robots);
+        readOnlyProjectiles = Collections.unmodifiableList(projectiles);
+        readOnlyPowerUps = Collections.unmodifiableList(powerUps);
+        readOnlyMap = map;
         this.maxDuration = maxDuration;
         randomGenerator = new Random();
 
@@ -77,7 +77,7 @@ public class Game extends JPanel {
         setFocusable(true);
     }
 
-    public void setDisplayParameters(int width, int height, int cameraX, int cameraY, double zoomFactor) {
+    void setDisplayParameters(int width, int height, int cameraX, int cameraY, double zoomFactor) {
         currentWidth = width;
         currentHeight = height;
         currentCameraX = cameraX;
@@ -230,28 +230,12 @@ public class Game extends JPanel {
         }
     }
 
-    public List<Robot> getRobotsInCell(int cellX, int cellY) {
+    List<Robot> getRobotsInCell(int cellX, int cellY) {
         List<Robot> list = robotGrid.get((cellX << 16) | cellY);
-        return list != null ? Collections.unmodifiableList(list) : Collections.emptyList();
+        return list != null ? list : Collections.emptyList();
     }
 
-    private List<Robot> createRobotReadOnlyView() {
-        return Collections.unmodifiableList(robots);
-    }
-
-    private List<Projectile> createProjectileReadOnlyView() {
-        return Collections.unmodifiableList(projectiles);
-    }
-
-    private List<PowerUp> createPowerUpReadOnlyView() {
-        return Collections.unmodifiableList(powerUps);
-    }
-
-    private Map createMapReadOnlyView() {
-        return map;
-    }
-
-    public void step() {
+    void step() {
         Set<Thread> threads = Thread.getAllStackTraces().keySet();
         HashSet<Integer> excludeRobotIds = new HashSet<>();
         String thinkThreadPrefix = "RobotThinkThread-";
@@ -376,35 +360,35 @@ public class Game extends JPanel {
         duration++;
     }
 
-    public int getDuration() {
+    int getDuration() {
         return duration;
     }
 
-    public int getMaxDuration() {
+    int getMaxDuration() {
         return maxDuration;
     }
 
-    public List<Robot> getRobots() {
-        return Collections.unmodifiableList(robots);
+    List<Robot> getRobots() {
+        return robots;
     }
 
-    public void addProjectile(Projectile projectile) {
+    void addProjectile(Projectile projectile) {
         projectiles.add(projectile);
     }
 
-    public Map getMap() {
+    Map getMap() {
         return map;
     }
 
-    public List<Projectile> getProjectiles() {
-        return Collections.unmodifiableList(projectiles);
+    List<Projectile> getProjectiles() {
+        return projectiles;
     }
 
-    public List<PowerUp> getPowerUps() {
-        return Collections.unmodifiableList(powerUps);
+    List<PowerUp> getPowerUps() {
+        return powerUps;
     }
 
-    public boolean isGameOver() {
+    boolean isGameOver() {
         if (duration >= maxDuration) {
             return true;
         }
@@ -418,7 +402,7 @@ public class Game extends JPanel {
         return aliveCount == 1;
     }
 
-    public Robot getWinner() {
+    Robot getWinner() {
         if (!isGameOver()) {
             return null;
         }

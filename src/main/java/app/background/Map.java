@@ -10,7 +10,7 @@ import java.awt.Graphics;
 public class Map {
     private int[][] tiles;
 
-    public Map(String name) {
+    Map(String name) {
         ArrayList<int[]> rows = new ArrayList<>();
         String path = "src/main/resources/maps/" + name + ".txt";
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {

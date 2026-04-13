@@ -8,7 +8,7 @@ public class PowerUp {
     private double y;
     private String type;
 
-    public PowerUp(double x, double y) {
+    PowerUp(double x, double y) {
         double r = Math.random();
         if (r < 0.33) {
             this.type = "health";
@@ -24,7 +24,7 @@ public class PowerUp {
         this.y = y;
     }
 
-    public PowerUp(double x, double y, String type, BufferedImage image) {
+    PowerUp(double x, double y, String type, BufferedImage image) {
         this.x = x;
         this.y = y;
         this.type = type;
@@ -39,7 +39,7 @@ public class PowerUp {
         return y;
     }
 
-    public BufferedImage getImage() {
+    BufferedImage getImage() {
         return image;
     }
 

@@ -13,7 +13,7 @@ public class Projectile {
     private int projectileDamage;
     private BufferedImage projectileImage;
 
-    public Projectile(double x, double y, int xTarget, int yTarget, int projectileSpeed, int projectileDamage,
+    Projectile(double x, double y, int xTarget, int yTarget, int projectileSpeed, int projectileDamage,
             BufferedImage projectileImage, Robot owner) {
         this.x = x;
         this.y = y;
@@ -25,7 +25,7 @@ public class Projectile {
         this.angle = Math.atan2(yTarget - this.y, xTarget - this.x);
     }
 
-    public void update(Game game) {
+    void update(Game game) {
         if (!alive) {
             return;
         }
@@ -129,7 +129,7 @@ public class Projectile {
         return projectileDamage;
     }
 
-    public BufferedImage getProjectileImage() {
+    BufferedImage getProjectileImage() {
         return projectileImage;
     }
 

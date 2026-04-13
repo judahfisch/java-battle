@@ -103,20 +103,20 @@ public abstract class Robot {
         return attackCurCooldown <= 0;
     }
 
-    protected final void shootAtLocation(int x, int y) {
+    protected void shootAtLocation(int x, int y) {
         xTarget = x;
         yTarget = y;
         shoot = true;
     }
 
     // Trusted logging surface for robot implementations without exposing System APIs.
-    protected final void log(String message) {
+    protected void log(String message) {
         System.out.println(message);
     }
 
     public abstract void think(final List<Robot> robots, final List<Projectile> projectiles, final Map map, final List<PowerUp> powerups);
 
-    private boolean isPointOkay(int pX, int pY, Map gameMap, ArrayList<Robot> allRobots) {
+    public final boolean isPointOkay(int pX, int pY, Map gameMap, ArrayList<Robot> allRobots) {
         if (gameMap == null || gameMap.getTilesInternal() == null)
             return false;
         int[][] mapTiles = gameMap.getTilesInternal();
@@ -154,7 +154,7 @@ public abstract class Robot {
         return true;
     }
 
-    private boolean canMoveTo(int targetX, int targetY, Game game) {
+    public final boolean canMoveTo(int targetX, int targetY, Game game) {
         int c1x = targetX;
         int c1y = targetY;
         int c2x = targetX + Utilities.ROBOT_SIZE - 1;
@@ -183,7 +183,7 @@ public abstract class Robot {
                 isPointOkay(c4x, c4y, game.getMap(), nearbyRobots);
     }
 
-    private boolean isTileMud(int currentX, int currentY, Map gameMap) {
+    public final boolean isTileMud(int currentX, int currentY, Map gameMap) {
         if (gameMap == null || gameMap.getTilesInternal() == null)
             return false;
         int[][] mapTiles = gameMap.getTilesInternal();
@@ -243,7 +243,7 @@ public abstract class Robot {
         }
     }
 
-    private void updatePowerUpEffects() {
+    private final void updatePowerUpEffects() {
         if (speedBoostDuration > 0) {
             speedBoostDuration--;
             if (speedBoostDuration == 0) {

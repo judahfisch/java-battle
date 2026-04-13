@@ -129,20 +129,20 @@ class RestrictedRobotClassLoader extends URLClassLoader {
 }
 
 public class Utilities {
-    public static BufferedImage WALL_IMAGE;
-    public static BufferedImage GRASS_IMAGE;
-    public static BufferedImage MUD_IMAGE;
-    public static BufferedImage ROBOT_ERROR;
-    public static BufferedImage DEFAULT_PROJECTILE_IMAGE;
-    public static BufferedImage HEALTH_PACK_IMAGE;
-    public static BufferedImage SPEED_PACK_IMAGE;
-    public static BufferedImage ATTACK_PACK_IMAGE;
+    static BufferedImage WALL_IMAGE;
+    static BufferedImage GRASS_IMAGE;
+    static BufferedImage MUD_IMAGE;
+    static BufferedImage ROBOT_ERROR;
+    static BufferedImage DEFAULT_PROJECTILE_IMAGE;
+    static BufferedImage HEALTH_PACK_IMAGE;
+    static BufferedImage SPEED_PACK_IMAGE;
+    static BufferedImage ATTACK_PACK_IMAGE;
 
-    public static final int WALL = 0;
-    public static final int GRASS = 1;
-    public static final int MUD = 2;
+    static final int WALL = 0;
+    static final int GRASS = 1;
+    static final int MUD = 2;
 
-    public static final double POWER_UP_SPAWN_CHANCE = 0.003;
+    static final double POWER_UP_SPAWN_CHANCE = 0.003;
 
     public static final int GAME_DELAY = 5;
 
@@ -161,7 +161,7 @@ public class Utilities {
     private static final java.util.Map<String, BufferedImage> imageCache = new ConcurrentHashMap<>();
     private static final String ROBOT_PACKAGE = "app.robots";
 
-    public static BufferedImage loadImage(String imgName) {
+    static BufferedImage loadImage(String imgName) {
         if (imgName == null) {
             return null;
         }
@@ -184,7 +184,7 @@ public class Utilities {
         }
     }
 
-    public static void loadImages() {
+    static void loadImages() {
         WALL_IMAGE = loadImage("wall.png");
         GRASS_IMAGE = loadImage("grass.png");
         MUD_IMAGE = loadImage("mud.png");
@@ -202,7 +202,7 @@ public class Utilities {
         }
     }
 
-    public static BufferedImage cropToContent(BufferedImage src) {
+    static BufferedImage cropToContent(BufferedImage src) {
         int width = src.getWidth();
         int height = src.getHeight();
 
